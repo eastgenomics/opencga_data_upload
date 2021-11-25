@@ -1,0 +1,7 @@
+*.log
+venv/
+src/input
+src/opencga-cli
+install.sh
+.idea
+config.yml

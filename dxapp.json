@@ -1,0 +1,64 @@
+{
+  "name": "opencga-data-load",
+  "title": "opencga-data-load",
+  "summary": "This app takes vcfs from dna nexus and index them into a particular opencga study",
+  "dxapi": "1.0.0",
+  "version": "v0.0.1",
+  "inputSpec": [
+    {
+      "name": "input_vcf",
+      "label": "Path to VCF to be indexed",
+      "class": "array:file",
+      "optional": false,
+      "patterns": ["*.vcf", "*.vcf.gz"],
+      "help": ""
+    },
+    {
+      "name": "input_config",
+      "label": "Configuration File",
+      "class": "file",
+      "optional": false,
+      "patterns": ["*"],
+      "help": "Configuration file that with some settings to run this app"
+    }
+  ],
+  "outputSpec": [
+    {
+      "name": "output",
+      "label": "Output info",
+      "class": "file",
+      "patterns": ["*"],
+      "help": "Output file with information about the running"
+    }
+  ],
+  "runSpec": {
+    "execDepends": [
+      {"name":  "openjdk-11-jre-headless"}
+    ],
+    "timeoutPolicy": {
+      "*": {
+        "hours": 48
+      }
+    },
+    "interpreter": "python3",
+    "file": "src/opencga-data-load.py",
+    "distribution": "Ubuntu",
+    "release": "20.04",
+    "version": "0"
+  },
+  "access": {
+    "network": [
+      "*"
+    ],
+    "project": "CONTRIBUTE"
+  },
+  "regionalOptions": {
+    "aws:us-east-1": {
+      "systemRequirements": {
+        "*": {
+          "instanceType": "mem1_ssd1_v2_x4"
+        }
+      }
+    }
+  }
+}
