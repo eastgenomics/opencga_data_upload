@@ -16,7 +16,7 @@ from subprocess import PIPE
 # Define logs
 logs = logging.getLogger()
 logs.setLevel(logging.DEBUG)
-handler = logging.FileHandler('opencga_loader.log')
+handler = logging.FileHandler('../opencga_loader.log')
 format = logging.Formatter('%(asctime)s  %(name)s  %(levelname)s: %(message)s')
 handler.setFormatter(format)
 logs.addHandler(handler)
@@ -126,18 +126,25 @@ def upload_file(opencga_cli, config, file):
     return uploaded
 
 
-def index_file(opencga_cli, config, file):
-    resp = oc.indexVariant(file)
-    oc.wait_for_job(resp.id)
-    job = oc.jobs.info(resp.id)
-    if (job.intenral.status === "DONE") {
-        result = oc.variant_operations.annotate(...)
-        ...
+def index_file(oc, config, file):
+    """
+    Indexes a VCF that has already been uploaded to opencga
+    :param oc: opencga client
+    :param config: configuration dictionary
+    :param file: name of the VCF file already uploaded in opencga
+    """
+    index_job = oc.variants.run_index(study=config['study'],
+                                      data={"file": file})
+    logs.info("Indexing file {} with job ID: {}".format(file, index_job.get_result(0)['id']))
+    try:
+        oc.wait_for_job(response=index_job.get_response(0))
+    except ValueError as ve:
+        logs.error("OpenCGA failed to index the file. {}".format(ve))
 
-
-    } else {
-
-    }
+    job_info = oc.jobs.info(study=config['study'], jobs=index_job.get_result(0)['id'])
+    job_status = job_info.get_result(0)['internal']['status']['name']
+    if job_status == "DONE":
+        oc.variant_operations.index_variant_annotation()
 
 
 if __name__ == '__main__':
@@ -174,14 +181,14 @@ if __name__ == '__main__':
     uploaded, indexed, annotated = check_file_status(oc=oc, config=config, file_name=os.path.basename(args.input))
 
     # Depending on the status of the file we will upload it and/or index it
-    #if not uploaded:
+    if not uploaded:
         # Upload file
-    file_uploaded = upload_file(opencga_cli=opencga_cli, config=config, file=args.input)
-    index_file(opencga_cli=opencga_cli, config=config, file=args.input)
-
-    #     # Index file
-    # elif uploaded and not indexed:
-    #     # index file
+        file_uploaded = upload_file(opencga_cli=opencga_cli, config=config, file=args.input)
+        # Index file
+        index_file(oc=oc, config=config, file=os.path.basename(args.input))
+    elif uploaded and not indexed:
+        # index file
+        index_file(oc=oc, config=config, file=os.path.basename(args.input))
     # elif uploaded and indexed and not annotated:
     #     # annotate?
     # elif uploaded and indexed and annotated:
