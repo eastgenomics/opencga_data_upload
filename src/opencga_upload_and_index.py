@@ -12,7 +12,6 @@ from pyopencga.opencga_client import OpencgaClient
 from pyopencga.opencga_config import ClientConfiguration
 from subprocess import PIPE
 
-
 # Define logs
 logs = logging.getLogger()
 logs.setLevel(logging.DEBUG)
@@ -71,36 +70,40 @@ def check_file_status(oc, config, file_name):
     :param file_name:
     :return:
     """
-    logs.info("Performing checks...")
+
+    # Init check variables to False
     uploaded = False
     indexed = False
     annotated = False
+
     # Check if file has been uploaded
+    logs.info("Performing checks...")
     try:
         # Query file search in opencga
-        file_search = oc.files.search(study=config['study'],
-                                      name=file_name)
+        file_search = oc.files.search(study=config['study'], name=file_name)
+
         # File does not exist
         if file_search.get_num_results() == 0:
             logs.info("File {} does not exist in the opencga study {}.".format(file_name, config['study']))
         # File exists and there's no more than one file with that name
         elif file_search.get_num_results() == 1:
-            file_status = file_search.get_result(0)['internal']['status']['name']
+            file_status = file_search.get_result(0)['internal']['status']['name']  # change to id in the next release
             if file_status == "READY":
                 uploaded = True
-                logs.info("File {} already exist in the opencga study {}. This file will not be uploaded again.\n"
-                             "Path to file: {}".format(file_name, config['study'], file_search.get_result(0)['path']))
+                logs.info("File {} already exists in the OpenCGA study {}. This file will not be uploaded again.\n"
+                          "Path to file: {}".format(file_name, config['study'], file_search.get_result(0)['path']))
                 # Check if file has been indexed (only for those already uploaded)
                 if file_search.get_result(0)['internal']['index']['status']['name'] == "READY":
                     indexed = True
             else:
                 # File exists but status is not READY - Needs to be uploaded again
                 logs.info("File {} already exist in the opencga study {} but status is {}. This file will be "
-                             "uploaded again.".format(file_name, config['study'], file_status))
-        elif file_search.get_num_results() > 1:
+                          "uploaded again.".format(file_name, config['study'], file_status))
+        # There is more than one file with this name in this study!
+        else:
             uploaded = True
-            logs.info("File {} has already been indexed in the opencga study {}.\n"
-                         "No further processing will be done.".format(file_name, config['study']))
+            logs.error("File {} has already been indexed in the opencga study {}.\n"
+                       "No further processing will be done.".format(file_name, config['study']))
     except Exception as e:
         logs.error(exc_info=e)
         sys.exit(0)
@@ -184,14 +187,11 @@ if __name__ == '__main__':
     if not uploaded:
         # Upload file
         file_uploaded = upload_file(opencga_cli=opencga_cli, config=config, file=args.input)
+    if not indexed:
         # Index file
         index_file(oc=oc, config=config, file=os.path.basename(args.input))
-    elif uploaded and not indexed:
-        # index file
-        index_file(oc=oc, config=config, file=os.path.basename(args.input))
-    # elif uploaded and indexed and not annotated:
-    #     # annotate?
-    # elif uploaded and indexed and annotated:
-    #     # do nothing
-    handler.close()
+    # if not annotated:
+    # Index file
+    # annotated_file(oc=oc, config=config, file=os.path.basename(args.input))
 
+handler.close()
