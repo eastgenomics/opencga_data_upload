@@ -95,13 +95,28 @@ def check_file_status(oc, config, file_name):
         # File exists and there's no more than one file with that name
         elif file_search.get_num_results() == 1:
             file_status = file_search.get_result(0)['internal']['status'][status_id]
+            # file_status = file_search.get_result(0)['internal']['variant']['status'][status_id]
             if file_status == "READY":
                 uploaded = True
                 logs.info("File {} already exists in the OpenCGA study {}. This file will not be uploaded again. "
                           "Path to file: {}".format(file_name, config['study'], file_search.get_result(0)['path']))
                 # Check if file has been indexed (only for those already uploaded)
                 if file_search.get_result(0)['internal']['index']['status'][status_id] == "READY":
+                # if file_search.get_result(0)['internal']['variant']['index']['status'][status_id] == "READY":
                     indexed = True
+                    if file_search.get_result(0)['internal']['annotationIndex']['status'][status_id] == "READY":
+                    # if file_search.get_result(0)['internal']['variant']['annotationIndex']['status'][status_id] == "READY":
+                        annotated = True
+                    # TODO: Add extra checks for variant index and sample index
+                        # variant:cd ...
+                            #annotationIndex
+                            #secondaryIndex (no lo vamos a hacer)
+
+                        # multifile upload not supported
+                        # sample: !!! get sample ID from file ^^^
+                            # index
+                            # genotypeIndex -- operation/variant/sample/index
+                            # annotationIndex
             else:
                 # File exists but status is not READY - Needs to be uploaded again
                 logs.info("File {} already exist in the OpenCGA study {} but status is {}. This file will be "
@@ -142,7 +157,7 @@ def annotate_file(oc, config):
     :param oc: OpenCGA client
     :param config: configuration dictionary
     """
-    annotate_job = oc.variant_operations.index_variant_annotation(study=config['study'])
+    annotate_job = oc.variant_operations.index_variant_annotation(study=config['study'], data={})
     logs.info("Annotating new variants in study {} with job ID: {}".format(config['study'],
                                                                            annotate_job.get_result(0)['id']))
     try:
@@ -150,6 +165,7 @@ def annotate_file(oc, config):
     except ValueError as ve:
         logs.error("OpenCGA annotation job failed. {}".format(ve))
         sys.exit(0)
+    # TODO: Add job logs to our logs
 
 
 def index_file(oc, config, file):
@@ -166,6 +182,7 @@ def index_file(oc, config, file):
     except ValueError as ve:
         logs.error("OpenCGA failed to index the file. {}".format(ve))
         sys.exit(0)
+    # TODO: Add job logs to our logs
 
     # job_info = oc.jobs.info(study=config['study'], jobs=index_job.get_result(0)['id'])
     # job_status = job_info.get_result(0)['internal']['status'][status_id]
@@ -176,12 +193,12 @@ def index_file(oc, config, file):
 if __name__ == '__main__':
     # Get location of the script to define the default location of the config file
     config_default = None
-    if os.path.isfile(os.path.dirname(os.path.dirname(__file__)) + "/resources/config.yml"):
-        config_default = os.path.dirname(os.path.dirname(__file__)) + "/resources/config.yml"
+    if os.path.isfile("/usr/bin/config.yml"):
+        config_default = "/usr/bin/config.yml"
     # Define location of the OpenCGA client
     opencga_cli = None
-    if os.path.isfile(os.path.dirname(__file__) + "/opencga-cli/opencga-client-2.1.0-rc2/bin/opencga.sh"):
-        opencga_cli = os.path.dirname(__file__) + "/opencga-cli/opencga-client-2.1.0-rc2/bin/opencga.sh"
+    if os.path.isfile("/usr/bin/opencga-cli/opencga-client-2.1.0-rc2/bin/opencga.sh"):
+        opencga_cli = "/usr/bin/opencga-cli/opencga-client-2.1.0-rc2/bin/opencga.sh"
     else:
         logs.error("OpenCGA CLI not found.")
         sys.exit(0)
@@ -189,7 +206,7 @@ if __name__ == '__main__':
     # Set the arguments of the command line
     parser = argparse.ArgumentParser(description=' Index VCFs from DNANexus into OpenCGA')
     parser.add_argument('--config', help='Path to configuration file', default=config_default)
-    parser.add_argument('--input', metavar='input', help='input vcf file')
+    parser.add_argument('--vcf', metavar='vcf', help='Input vcf file')
     args = parser.parse_args()
 
     # Read config file
@@ -202,24 +219,24 @@ if __name__ == '__main__':
     oc = connect_pyopencga(config=config)
 
     # Check if file has been already uploaded and indexed
-    uploaded, indexed, annotated = check_file_status(oc=oc, config=config, file_name=os.path.basename(args.input))
+    uploaded, indexed, annotated = check_file_status(oc=oc, config=config, file_name=os.path.basename(args.vcf))
 
     # Depending on the status of the file we will upload it and/or index it
     if not uploaded:
         # Upload file
-        upload_file(opencga_cli=opencga_cli, config=config, file=args.input)
+        upload_file(opencga_cli=opencga_cli, config=config, file=args.vcf)
     if not indexed:
         # Index file
-        index_file(oc=oc, config=config, file=os.path.basename(args.input))
+        index_file(oc=oc, config=config, file=os.path.basename(args.vcf))
     if not annotated:
         # Annotate file
         annotate_file(oc=oc, config=config)
 
     # Check again the status of the file
-    uploaded, indexed, annotated = check_file_status(oc=oc, config=config, file_name=os.path.basename(args.input))
+    uploaded, indexed, annotated = check_file_status(oc=oc, config=config, file_name=os.path.basename(args.vcf))
     if uploaded and indexed and annotated:
         logs.info("File {} has been successfully uploaded, indexed and annotated.")
     else:
         logs.error("Something went wrong. Status of file {}:\n\t- uploaded: {}\n\t- indexed: {}\n\t- annotated: {}\n"
-                   "Please check the logs to identify the problem.".format(args.input, uploaded, indexed, annotated))
+                   "Please check the logs to identify the problem.".format(args.vcf, uploaded, indexed, annotated))
     handler.close()

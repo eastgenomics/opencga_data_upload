@@ -1,13 +1,13 @@
 {
-  "name": "opencga-data-load",
-  "title": "opencga-data-load",
-  "summary": "This app takes vcfs from dna nexus and index them into a particular opencga study",
+  "name": "opencga-data-upload",
+  "title": "opencga-data-upload",
+  "summary": "This app takes VCFs from DNAnexus and uploads, indexes and annotates them into a particular OpenCGA study",
   "dxapi": "1.0.0",
-  "version": "v0.0.1",
+  "version": "0.0.1",
   "inputSpec": [
     {
       "name": "input_vcf",
-      "label": "Path to VCF to be indexed",
+      "label": "Path to VCF to be uploaded",
       "class": "array:file",
       "optional": false,
       "patterns": ["*.vcf", "*.vcf.gz"],
@@ -19,7 +19,7 @@
       "class": "file",
       "optional": false,
       "patterns": ["*"],
-      "help": "Configuration file that with some settings to run this app"
+      "help": "Configuration file containing the necessary settings to run this app"
     }
   ],
   "outputSpec": [
@@ -28,7 +28,7 @@
       "label": "Output info",
       "class": "file",
       "patterns": ["*"],
-      "help": "Output file with information about the running"
+      "help": "Output file with information about the process"
     }
   ],
   "runSpec": {
@@ -37,11 +37,11 @@
     ],
     "timeoutPolicy": {
       "*": {
-        "hours": 48
+        "hours": 24
       }
     },
-    "interpreter": "python3",
-    "file": "src/opencga-data-load.py",
+    "interpreter": "bash",
+    "file": "src/opencga-data-upload.sh",
     "distribution": "Ubuntu",
     "release": "20.04",
     "version": "0"

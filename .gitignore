@@ -5,3 +5,4 @@ src/opencga-cli
 install.sh
 .idea
 config.yml
+test/
