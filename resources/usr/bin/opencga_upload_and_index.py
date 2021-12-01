@@ -199,9 +199,10 @@ if __name__ == '__main__':
     cli_default = None
     if os.path.isfile("/usr/bin/opencga-cli/opencga-client-2.1.0-rc2/bin/opencga.sh"):
         cli_default = "/usr/bin/opencga-cli/opencga-client-2.1.0-rc2/bin/opencga.sh"
-    else:
-        logs.error("OpenCGA CLI not found.")
-        sys.exit(0)
+    # Not needed as the CLI has become an input to the script
+    # else:
+    #     logs.error("OpenCGA CLI not found.")
+    #     sys.exit(0)
 
     # Set the arguments of the command line
     parser = argparse.ArgumentParser(description=' Index VCFs from DNANexus into OpenCGA')
