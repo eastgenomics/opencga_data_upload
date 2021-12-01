@@ -41,7 +41,8 @@ main() {
         name=$(dx describe ${input_vcf[$i]} --name)
         echo "File ${name} has been downloaded"
         opencga_cmd="python3 opencga_upload_and_index.py --config /home/dnanexus/${input_config} \
-                                                        --vcf /home/dnanexus/${input_vcf}"
+                                                        --vcf /home/dnanexus/${input_vcf} \
+                                                        --cli /home/dnanexus/${input_cli}"
         echo ${opencga_cmd}
         eval ${opencga_cmd}
         rm ${name}

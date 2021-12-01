@@ -6,3 +6,4 @@ install.sh
 .idea
 config.yml
 test/
+resources/usr/bin/opencga-cli/
