@@ -15,6 +15,9 @@
 # See https://documentation.dnanexus.com/developer for tutorials on how
 # to modify this file.
 
+# configurations
+opencga_file_id="project-G5XXyY84XjQPZKJfKX0ZQZpz:file-G6XPFF04XjQP8Z175fG1q8Y7"
+
 main() {
 
     echo 'Value of input_vcf: "${input_vcf[@]}"'
@@ -26,8 +29,10 @@ main() {
     # "$variable" --name".
     # Fill in your application code here.
 
+    # download opencga cli
+    dx download ${opencga_file_id}
     # unpack opencga
-    tar -xzf /usr/bin/opencga-client-2.1.0-rc2.tar.gz
+    tar -xzf /home/dnanexus/opencga-client-2.1.0-rc2.tar.gz
 
     # download config
     dx download "${input_config}" -o input_config
