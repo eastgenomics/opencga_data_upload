@@ -196,18 +196,23 @@ if __name__ == '__main__':
     if os.path.isfile("/usr/bin/config.yml"):
         config_default = "/usr/bin/config.yml"
     # Define location of the OpenCGA client
-    opencga_cli = None
+    cli_default = None
     if os.path.isfile("/usr/bin/opencga-cli/opencga-client-2.1.0-rc2/bin/opencga.sh"):
-        opencga_cli = "/usr/bin/opencga-cli/opencga-client-2.1.0-rc2/bin/opencga.sh"
-    else:
-        logs.error("OpenCGA CLI not found.")
-        sys.exit(0)
+        cli_default = "/usr/bin/opencga-cli/opencga-client-2.1.0-rc2/bin/opencga.sh"
+    # Not needed as the CLI has become an input to the script
+    # else:
+    #     logs.error("OpenCGA CLI not found.")
+    #     sys.exit(0)
 
     # Set the arguments of the command line
     parser = argparse.ArgumentParser(description=' Index VCFs from DNANexus into OpenCGA')
     parser.add_argument('--config', help='Path to configuration file', default=config_default)
+    parser.add_argument('--cli', help='Path to OpenCGA cli', default=cli_default)
     parser.add_argument('--vcf', metavar='vcf', help='Input vcf file')
     args = parser.parse_args()
+
+    # Define OpenCGA cli
+    opencga_cli = args.cli
 
     # Read config file
     config = read_config(config_file=args.config)

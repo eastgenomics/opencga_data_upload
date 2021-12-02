@@ -20,6 +20,14 @@
       "optional": false,
       "patterns": ["*"],
       "help": "Configuration file containing the necessary settings to run this app"
+    },
+    {
+      "name": "input_cli",
+      "label": "OpenCGA Client",
+      "class": "file",
+      "optional": false,
+      "patterns": ["*.tar.gz"],
+      "help": "A .tar.gz file of the OpenCGA CLI"
     }
   ],
   "outputSpec": [

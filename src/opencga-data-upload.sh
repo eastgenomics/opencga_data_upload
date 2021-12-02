@@ -15,13 +15,12 @@
 # See https://documentation.dnanexus.com/developer for tutorials on how
 # to modify this file.
 
-# configurations
-opencga_file_id="project-G5XXyY84XjQPZKJfKX0ZQZpz:file-G6XPFF04XjQP8Z175fG1q8Y7"
-
 main() {
 
     echo 'Value of input_vcf: "${input_vcf[@]}"'
     echo "Value of input_config: '${input_config}'"
+    echo "Value of input_config: '${input_cli}'"
+
 
     # The following line(s) use the dx command-line tool to download your file
     # inputs to the local file system using variable names for the filenames. To
@@ -29,10 +28,9 @@ main() {
     # "$variable" --name".
     # Fill in your application code here.
 
-    # download opencga cli
-    dx download ${opencga_file_id}
-    # unpack opencga
-    tar -xzf /home/dnanexus/opencga-client-2.1.0-rc2.tar.gz
+    # Download and unpack opencga
+    dx download "${input_cli}" -o input_cli
+    tar -xzf /home/dnanexus/${input_cli}
 
     # download config
     dx download "${input_config}" -o input_config
@@ -46,7 +44,8 @@ main() {
         name=$(dx describe ${input_vcf[$i]} --name)
         echo "File ${name} has been downloaded"
         opencga_cmd="python3 opencga_upload_and_index.py --config /home/dnanexus/${input_config} \
-                                                        --vcf /home/dnanexus/${input_vcf}"
+                                                        --vcf /home/dnanexus/${input_vcf} \
+                                                        --cli /home/dnanexus/${input_cli}"
         echo ${opencga_cmd}
         eval ${opencga_cmd}
         rm ${name}
