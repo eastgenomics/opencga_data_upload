@@ -4,6 +4,7 @@
 import os
 import sys
 import yaml
+import json
 import logging
 import argparse
 import subprocess
@@ -23,26 +24,36 @@ logs.addHandler(handler)
 status_id = "name"  # Will be replaced by ID in the next release
 
 
-def read_config(config_file):
+def read_metadata(metadata_file):
     """
-    Load the configuration file
-    :param config_file:
-    :return: dictionary with config params
+    Load the metadata.json file
+    :param metadata_file:
+    :return: dictionary with metadata params
     """
-    config = yaml.load(open(config_file), Loader=yaml.FullLoader)
-    return config
+    metadata = json.load(open(metadata_file))
+    return metadata
+
+## This file is taken from the main.sh code
+# def read_credentials(cred_file):
+#     """
+#     Load the credentials file
+#     :param credentials file:
+#     :return: dictionary with cred params
+#     """
+#     credentials = json.load(open(cred_file))
+#     return credentials
 
 
-def connect_pyopencga(config):
+def connect_pyopencga(user, password, host):
     """
     Connect to pyopencga
     :param config: dictionary of parameters.
     """
-    opencga_config_dict = {'rest': {'host': config['rest']['host']}}
+    opencga_config_dict = {'rest': {'host': host}}
     opencga_config = ClientConfiguration(opencga_config_dict)
     oc = OpencgaClient(opencga_config)
-    oc.login(user=config['credentials']['user'],
-             password=config['credentials']['password'])
+    oc.login(user=user,
+             password=password)
     if oc.token is not None:
         logging.info("Succefully connected to pyopencga.\nTocken ID: {}".format(oc.token))
     else:
@@ -51,16 +62,16 @@ def connect_pyopencga(config):
     return oc
 
 
-def connect_cli(config, opencga_cli):
+def connect_cli(user, password, opencga_cli):
     """
     Connect OpenCGA CLI to instance
     :param opencga_cli: OpenCGA CLI
     :param config: configuration dictionary
     """
     # Launch login on the CLI
-    process = subprocess.run([opencga_cli, "users", "login", "-u", config['credentials']['user']],
+    process = subprocess.run([opencga_cli, "users", "login", "-u", user],
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                             input=config['credentials']['password'])
+                             input=password)
     logging.info(process.stdout)
     # Check that the login worked
     if process.stderr != "":
@@ -68,7 +79,7 @@ def connect_cli(config, opencga_cli):
         sys.exit(0)
 
 
-def check_file_status(oc, config, file_name):
+def check_file_status(oc, study, file_name):
     """
     Perform file checks. First if file has already been uploaded (file name exists in files.search) and if so, check
     if the file has been already indexed and annotated.
@@ -87,11 +98,11 @@ def check_file_status(oc, config, file_name):
     logs.info("Checking status of the file")
     try:
         # Query file search in OpenCGA
-        file_search = oc.files.search(study=config['study'], name=file_name)
+        file_search = oc.files.search(study=study, name=file_name)
 
         # File does not exist
         if file_search.get_num_results() == 0:
-            logs.info("File {} does not exist in the OpenCGA study {}.".format(file_name, config['study']))
+            logs.info("File {} does not exist in the OpenCGA study {}.".format(file_name, study))
         # File exists and there's no more than one file with that name
         elif file_search.get_num_results() == 1:
             file_status = file_search.get_result(0)['internal']['status'][status_id]
@@ -99,7 +110,7 @@ def check_file_status(oc, config, file_name):
             if file_status == "READY":
                 uploaded = True
                 logs.info("File {} already exists in the OpenCGA study {}. This file will not be uploaded again. "
-                          "Path to file: {}".format(file_name, config['study'], file_search.get_result(0)['path']))
+                          "Path to file: {}".format(file_name, study, file_search.get_result(0)['path']))
                 # Check if file has been indexed (only for those already uploaded)
                 if file_search.get_result(0)['internal']['index']['status'][status_id] == "READY":
                 # if file_search.get_result(0)['internal']['variant']['index']['status'][status_id] == "READY":
@@ -120,12 +131,12 @@ def check_file_status(oc, config, file_name):
             else:
                 # File exists but status is not READY - Needs to be uploaded again
                 logs.info("File {} already exist in the OpenCGA study {} but status is {}. This file will be "
-                          "uploaded again.".format(file_name, config['study'], file_status))
+                          "uploaded again.".format(file_name, study, file_status))
         # There is more than one file with this name in this study!
         else:
             uploaded = True
             logs.error("File {} has already been indexed in the OpenCGA study {}.\n"
-                       "No further processing will be done.".format(file_name, config['study']))
+                       "No further processing will be done.".format(file_name, study))
             sys.exit(0)
     except Exception as e:
         logs.error(exc_info=e)
@@ -133,13 +144,13 @@ def check_file_status(oc, config, file_name):
     return uploaded, indexed, annotated
 
 
-def upload_file(opencga_cli, config, file):
+def upload_file(opencga_cli, study, file):
     """
     Uploads a file to the OpenCGA instance
     :param opencga_cli: OpenCGA CLI
     :param config: configuration dictionary
     """
-    process = subprocess.Popen([opencga_cli, "files", "upload", "--input", file, "--study", config['study']],
+    process = subprocess.Popen([opencga_cli, "files", "upload", "--input", file, "--study", study],
                                stdout=PIPE, stderr=PIPE, text=True)
     process.wait()  # Wait until the execution is complete to continue with the program
     stdout, stderr = process.communicate()
@@ -151,14 +162,14 @@ def upload_file(opencga_cli, config, file):
         logs.info(stdout)
 
 
-def annotate_file(oc, config):
+def annotate_file(oc, study):
     """
     Launches an OpenCGA job to force the annotation of any new variants added to the database.
     :param oc: OpenCGA client
     :param config: configuration dictionary
     """
-    annotate_job = oc.variant_operations.index_variant_annotation(study=config['study'], data={})
-    logs.info("Annotating new variants in study {} with job ID: {}".format(config['study'],
+    annotate_job = oc.variant_operations.index_variant_annotation(study=study, data={})
+    logs.info("Annotating new variants in study {} with job ID: {}".format(study,
                                                                            annotate_job.get_result(0)['id']))
     try:
         oc.wait_for_job(response=annotate_job.get_response(0))
@@ -168,14 +179,14 @@ def annotate_file(oc, config):
     # TODO: Add job logs to our logs
 
 
-def index_file(oc, config, file):
+def index_file(oc, study, file):
     """
     Indexes a VCF that has already been uploaded to OpenCGA
     :param oc: OpenCGA client
     :param config: configuration dictionary
     :param file: name of the VCF file already uploaded in OpenCGA
     """
-    index_job = oc.variants.run_index(study=config['study'], data={"file": file})
+    index_job = oc.variants.run_index(study=study, data={"file": file})
     logs.info("Indexing file {} with job ID: {}".format(file, index_job.get_result(0)['id']))
     try:
         oc.wait_for_job(response=index_job.get_response(0))
@@ -184,64 +195,80 @@ def index_file(oc, config, file):
         sys.exit(0)
     # TODO: Add job logs to our logs
 
-    # job_info = oc.jobs.info(study=config['study'], jobs=index_job.get_result(0)['id'])
+    # job_info = oc.jobs.info(study=study, jobs=index_job.get_result(0)['id'])
     # job_status = job_info.get_result(0)['internal']['status'][status_id]
     # if job_status == "DONE":
     #     oc.variant_operations.index_variant_annotation()
 
 
 if __name__ == '__main__':
-    # Get location of the script to define the default location of the config file
-    config_default = None
-    if os.path.isfile("/usr/bin/config.yml"):
-        config_default = "/usr/bin/config.yml"
-    # Define location of the OpenCGA client
-    cli_default = None
-    if os.path.isfile("/usr/bin/opencga-cli/opencga-client-2.1.0-rc2/bin/opencga.sh"):
-        cli_default = "/usr/bin/opencga-cli/opencga-client-2.1.0-rc2/bin/opencga.sh"
-    # Not needed as the CLI has become an input to the script
-    # else:
-    #     logs.error("OpenCGA CLI not found.")
-    #     sys.exit(0)
 
     # Set the arguments of the command line
     parser = argparse.ArgumentParser(description=' Index VCFs from DNANexus into OpenCGA')
-    parser.add_argument('--config', help='Path to configuration file', default=config_default)
-    parser.add_argument('--cli', help='Path to OpenCGA cli', default=cli_default)
+    parser.add_argument('--metadata', help='Path to metadata file')
+    parser.add_argument('--cli', help='OpenCGA cli')
+    parser.add_argument('--user', help='OpenCGA user')
+    parser.add_argument('--password', help='OpenCGA password')
     parser.add_argument('--vcf', metavar='vcf', help='Input vcf file')
     args = parser.parse_args()
 
-    # Define OpenCGA cli
-    opencga_cli = args.cli
+    # Get location of the script to define the default location of the config file
+    metadata = None
+    if args.metadata is not None:
+        metadata = args.metadata
+        logs.info("Input metadata json: {}".format(metadata))
+    else:
+        # If cli is not passed as an argument nor is in the path, raise and error and exit.
+        logs.error("No metadata.json file found")
+        sys.exit(0)
 
-    # Read config file
-    config = read_config(config_file=args.config)
+    # Define location of the OpenCGA client
+    opencga_cli = None
+    if args.cli is not None:
+        # If cli is passed as an argument, use this
+        opencga_cli = args.cli
+        logs.info("Input OpenCGA CLI: {}".format(opencga_cli))
+    else:
+        # If cli is not passed as an argument raise and error and exit.
+        logs.error("OpenCGA CLI not found.")
+        sys.exit(0)
+
+    # Read metadata file AND define study variable
+    metadata = read_metadata(metadata_file=args.metadata)
+    if metadata['study'] is not None:
+        study = metadata['study']
+        logs.info("OpenCGA study to operate {}".format(study))
+    else:
+        logs.error("OpenCGA study not found in metadata file. Study id is mandatory.")
+        sys.exit(0)
 
     # Login OpenCGA CLI
-    connect_cli(config=config, opencga_cli=opencga_cli)
+    connect_cli(user=args.user, password=args.password, opencga_cli=opencga_cli)
 
     # Create pyopencga client
-    oc = connect_pyopencga(config=config)
+    oc = connect_pyopencga(user=args.user, password=args.password, host=args.host)
 
+    # COMMENT FROM HERE
     # Check if file has been already uploaded and indexed
-    uploaded, indexed, annotated = check_file_status(oc=oc, config=config, file_name=os.path.basename(args.vcf))
+    uploaded, indexed, annotated = check_file_status(oc=oc, study=study, file_name=os.path.basename(args.vcf))
 
     # Depending on the status of the file we will upload it and/or index it
     if not uploaded:
         # Upload file
-        upload_file(opencga_cli=opencga_cli, config=config, file=args.vcf)
+        upload_file(opencga_cli=opencga_cli, study=study, file=args.vcf)
     if not indexed:
         # Index file
-        index_file(oc=oc, config=config, file=os.path.basename(args.vcf))
+        index_file(oc=oc, study=study, file=os.path.basename(args.vcf))
     if not annotated:
         # Annotate file
-        annotate_file(oc=oc, config=config)
+        annotate_file(oc=oc, study=study)
 
     # Check again the status of the file
-    uploaded, indexed, annotated = check_file_status(oc=oc, config=config, file_name=os.path.basename(args.vcf))
+    uploaded, indexed, annotated = check_file_status(oc=oc, study=study, file_name=os.path.basename(args.vcf))
     if uploaded and indexed and annotated:
         logs.info("File {} has been successfully uploaded, indexed and annotated.")
     else:
         logs.error("Something went wrong. Status of file {}:\n\t- uploaded: {}\n\t- indexed: {}\n\t- annotated: {}\n"
                    "Please check the logs to identify the problem.".format(args.vcf, uploaded, indexed, annotated))
+
     handler.close()

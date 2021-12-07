@@ -4,6 +4,10 @@ src/input
 src/opencga-cli
 install.sh
 .idea
-config.yml
 test/
 resources/usr/bin/opencga-cli/
+config.yml
+metadata.json
+credentials.json
+test.sh
+resources/home/dnanexus/opencga_upload_and_index_test.py

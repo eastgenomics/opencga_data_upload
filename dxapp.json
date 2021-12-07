@@ -1,44 +1,44 @@
 {
-  "name": "opencga-data-upload",
-  "title": "opencga-data-upload",
+  "name": "opencga_data_upload",
+  "title": "opencga_data_upload",
   "summary": "This app takes VCFs from DNAnexus and uploads, indexes and annotates them into a particular OpenCGA study",
   "dxapi": "1.0.0",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "inputSpec": [
     {
       "name": "input_vcf",
       "label": "Path to VCF to be uploaded",
-      "class": "array:file",
+      "class": "file",
       "optional": false,
       "patterns": ["*.vcf", "*.vcf.gz"],
       "help": ""
     },
     {
-      "name": "input_config",
-      "label": "Configuration File",
+      "name": "input_metadata",
+      "label": "Metadata File",
       "class": "file",
       "optional": false,
-      "patterns": ["*"],
-      "help": "Configuration file containing the necessary settings to run this app"
+      "patterns": ["*.json"],
+      "help": "Input metadata file with, at least, the OpenCGA study id. Further metadata specifications can be reflected in this file"
     },
     {
-      "name": "input_cli",
-      "label": "OpenCGA Client",
+      "name": "credentials",
+      "label": "credentials File",
       "class": "file",
       "optional": false,
-      "patterns": ["*.tar.gz"],
-      "help": "A .tar.gz file of the OpenCGA CLI"
+      "patterns": ["*.json"],
+      "help": "Credentials file containing the necessary parameters to run this app"
     }
   ],
   "outputSpec": [
-    {
-      "name": "output",
-      "label": "Output info",
-      "class": "file",
-      "patterns": ["*"],
-      "help": "Output file with information about the process"
-    }
-  ],
+     {
+       "name": "output_file",
+       "label": "Output File",
+       "help": "One or more vcf files to be uploaded by opencga",
+       "class": "file",
+       "patterns": ["*"]
+     }
+   ],
   "runSpec": {
     "execDepends": [
       {"name":  "openjdk-11-jre-headless"}
