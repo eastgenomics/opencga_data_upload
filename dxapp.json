@@ -7,27 +7,27 @@
   "inputSpec": [
     {
       "name": "input_vcf",
-      "label": "Path to VCF to be uploaded",
+      "label": "VCF to be uploaded",
       "class": "array:file",
       "optional": false,
       "patterns": ["*.vcf", "*.vcf.gz"],
       "help": ""
     },
     {
-      "name": "input_config",
-      "label": "Configuration File",
+      "name": "input_metadata",
+      "label": "Metadata file",
       "class": "file",
       "optional": false,
       "patterns": ["*"],
-      "help": "Configuration file containing the necessary settings to run this app"
+      "help": "JSON file containing information about the study and the samples"
     },
     {
-      "name": "input_cli",
-      "label": "OpenCGA Client",
+      "name": "input_credentials",
+      "label": "Credentials file",
       "class": "file",
       "optional": false,
-      "patterns": ["*.tar.gz"],
-      "help": "A .tar.gz file of the OpenCGA CLI"
+      "patterns": ["*"],
+      "help": "JSON file containing the credentials and host for access to the OpenCGA instance"
     }
   ],
   "outputSpec": [
