@@ -76,6 +76,7 @@ def connect_cli(user, password, opencga_cli):
     # Check that the login worked
     if process.stderr != "":
         logs.error("Failed to connect to OpenCGA CLI")
+        logs.error(process.stderr)
         sys.exit(0)
 
 
@@ -207,6 +208,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=' Index VCFs from DNANexus into OpenCGA')
     parser.add_argument('--metadata', help='Path to metadata file')
     parser.add_argument('--cli', help='OpenCGA cli')
+    parser.add_argument('--host', help='OpenCGA host of the installation')
     parser.add_argument('--user', help='OpenCGA user')
     parser.add_argument('--password', help='OpenCGA password')
     parser.add_argument('--vcf', metavar='vcf', help='Input vcf file')

@@ -88,17 +88,19 @@ main() {
     pip install -r /home/dnanexus/requirements.txt -q
 
     # Run the python script
+    echo "### Python script starts here:"
     opencga_cmd="python3 opencga_upload_and_index.py --metadata /home/dnanexus/metadata \
+                                                    --host $host \
                                                     --user $user \
                                                     --password $password \
                                                     --cli /home/dnanexus/$cli_untar/bin/opencga.sh \
                                                     --vcf /home/dnanexus/${vcf_name}"
     # TODO Comment this echo
     echo ${opencga_cmd}
-    echo "### Python script starts here:"
     eval ${opencga_cmd}
     rm ${vcf_name}
-
+    # ls -l
+    cat opencga_loader.log
 
     # To report any recognized errors in the correct format in
     # $HOME/job_error.json and exit this script, you can use the
@@ -120,6 +122,7 @@ main() {
     echo "File $vcf_name is loaded into the opencga study $study" > /home/dnanexus/output_file
 
     output_file=$(dx upload output_file --brief)
+    output_loader=$(dx upload opencga_loader.log)
 
     # The following line(s) use the utility dx-jobutil-add-output to format and
     # add output variables to your job's output as appropriate for the output
