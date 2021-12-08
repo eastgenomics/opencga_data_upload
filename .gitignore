@@ -1,9 +1,6 @@
 *.log
 venv/
-src/input
-src/opencga-cli
-install.sh
 .idea
-config.yml
 test/
-resources/usr/bin/opencga-cli/
+requirements_old.txt
+inputs/

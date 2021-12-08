@@ -337,6 +337,7 @@ def annotate_variants(oc, metadata):
                                                                            annotate_job.get_result(0)['id']))
     try:
         oc.wait_for_job(response=annotate_job.get_response(0))
+        print("hello")
     except ValueError as ve:
         logs.error("OpenCGA annotation job failed. {}".format(ve))
         sys.exit(0)

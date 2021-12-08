@@ -53,6 +53,10 @@ main() {
     dnanexus_fid=$(dx describe ${opencga_cli_file_id} --json | \
     python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
 
+    # Install python dependencies
+    pip install -r /home/dnanexus/requirements.txt -q
+
+    # Run opencga load
     opencga_cmd="python3 opencga_upload_and_index.py --metadata /home/dnanexus/${input_metadata} \
                                                      --credentials /home/dnanexus/${input_credentials} \
                                                      --vcf /home/dnanexus/${input_vcf} \
