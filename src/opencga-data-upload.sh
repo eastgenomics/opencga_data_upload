@@ -57,9 +57,9 @@ main() {
     pip install -r /home/dnanexus/requirements.txt -q
 
     # Run opencga load
-    opencga_cmd="python3 opencga_upload_and_index.py --metadata /home/dnanexus/${input_metadata} \
-                                                     --credentials /home/dnanexus/${input_credentials} \
-                                                     --vcf /home/dnanexus/${input_vcf} \
+    opencga_cmd="python3 opencga_upload_and_index.py --metadata /home/dnanexus/in/metadata.json \
+                                                     --credentials /home/dnanexus/in/credentials.json \
+                                                     --vcf /home/dnanexus/in/"${vcf_name}" \
                                                      --cli /home/dnanexus/${cli_name}/bin/opencga.sh \
                                                      --dnanexus_fid ${dnanexus_fid}"
     echo "${opencga_cmd}"
