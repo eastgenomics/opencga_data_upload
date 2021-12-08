@@ -90,7 +90,7 @@ main() {
     # Run the python script
     echo "### Python script starts here:"
     opencga_cmd="python3 opencga_upload_and_index.py --metadata /home/dnanexus/metadata \
-                                                    --host $host \
+                                                    --host $host
                                                     --user $user \
                                                     --password $password \
                                                     --cli /home/dnanexus/$cli_untar/bin/opencga.sh \
@@ -99,7 +99,11 @@ main() {
     echo ${opencga_cmd}
     eval ${opencga_cmd}
     rm ${vcf_name}
+
+    #Display all the files in current directory --> just for testing
     # ls -l
+    # Testing
+    echo "Now I'm going to cat the log"
     cat opencga_loader.log
 
     # To report any recognized errors in the correct format in
@@ -129,5 +133,6 @@ main() {
     # class.  Run "dx-jobutil-add-output -h" for more information on what it
     # does.
 
+    ### ADD OUTPUT LOADER HERE!
     dx-jobutil-add-output output_file "$output_file" --class=file
 }

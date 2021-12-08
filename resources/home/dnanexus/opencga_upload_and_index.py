@@ -12,13 +12,34 @@ from pyopencga.opencga_client import OpencgaClient
 from pyopencga.opencga_config import ClientConfiguration
 from subprocess import PIPE
 
+## OLD LOGGING CONFIGURATION
 # Define logs handler
+# logs = logging.getLogger()
+# logs.setLevel(logging.INFO)
+# format = logging.Formatter('%(asctime)s  %(name)s  %(levelname)s: %(message)s')
+# file_handler = logging.FileHandler(filename='opencga_loader.log', mode='w')
+# file_handler.setFormatter(format)
+# console_handler = logging.StreamHandler()
+# console_handler.setFormatter(format)
+
+
+# set up logging to file
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s  %(name)s  %(levelname)s: %(message)s',
+                    datefmt='%m-%d %H:%M',
+                    filename='opencga_loader.log',
+                    filemode='w')
+# define a Handler which writes INFO messages or higher to the sys.stderr
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+# set a format which is simpler for console use
+formatter = logging.Formatter('%(asctime)s  %(name)s  %(levelname)s: %(message)s')
+# tell the handler to use this format
+console.setFormatter(formatter)
+# add the handler to the root logger
 logs = logging.getLogger()
-logs.setLevel(logging.INFO)
-handler = logging.FileHandler(filename='opencga_loader.log', mode='w')
-format = logging.Formatter('%(asctime)s  %(name)s  %(levelname)s: %(message)s')
-handler.setFormatter(format)
-logs.addHandler(handler)
+logs.addHandler(console)
+
 
 # Define status id
 status_id = "name"  # Will be replaced by ID in the next release
@@ -140,7 +161,7 @@ def check_file_status(oc, study, file_name):
                        "No further processing will be done.".format(file_name, study))
             sys.exit(0)
     except Exception as e:
-        logs.error(exc_info=e)
+        logs.error(e)
         sys.exit(0)
     return uploaded, indexed, annotated
 
@@ -206,7 +227,7 @@ if __name__ == '__main__':
 
     # Set the arguments of the command line
     parser = argparse.ArgumentParser(description=' Index VCFs from DNANexus into OpenCGA')
-    parser.add_argument('--metadata', help='Path to metadata file')
+    parser.add_argument('--metadata', help='JSON file containing the metadata (minimum required information: "study")')
     parser.add_argument('--cli', help='OpenCGA cli')
     parser.add_argument('--host', help='OpenCGA host of the installation')
     parser.add_argument('--user', help='OpenCGA user')
