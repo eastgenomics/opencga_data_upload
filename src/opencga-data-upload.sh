@@ -54,7 +54,7 @@ main() {
     python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
 
     # Install python dependencies
-    pip install -r /home/dnanexus/requirements.txt -q
+    pip install --user -r /home/dnanexus/requirements.txt -q
 
     # Run opencga load
     opencga_cmd="python3 opencga_upload_and_index.py --metadata /home/dnanexus/in/metadata.json \
