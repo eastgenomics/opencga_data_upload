@@ -10,4 +10,4 @@ config.yml
 metadata.json
 credentials.json
 test.sh
-resources/home/dnanexus/opencga_upload_and_index_test.py
+resources/home/dnanexus/opencga_upload_and_index_old.py

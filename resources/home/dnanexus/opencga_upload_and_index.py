@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 # import required libraries
+import datetime
 import os
 import sys
-import yaml
 import json
 import logging
 import argparse
@@ -12,34 +12,28 @@ from pyopencga.opencga_client import OpencgaClient
 from pyopencga.opencga_config import ClientConfiguration
 from subprocess import PIPE
 
-## OLD LOGGING CONFIGURATION
-# Define logs handler
-# logs = logging.getLogger()
-# logs.setLevel(logging.INFO)
-# format = logging.Formatter('%(asctime)s  %(name)s  %(levelname)s: %(message)s')
-# file_handler = logging.FileHandler(filename='opencga_loader.log', mode='w')
-# file_handler.setFormatter(format)
-# console_handler = logging.StreamHandler()
-# console_handler.setFormatter(format)
 
-
-# set up logging to file
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s  %(name)s  %(levelname)s: %(message)s',
-                    datefmt='%m-%d %H:%M',
-                    filename='opencga_loader.log',
-                    filemode='w')
-# define a Handler which writes INFO messages or higher to the sys.stderr
-console = logging.StreamHandler()
+# Define logger handlers (one file for logs and one for errors)
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+# create file handler which logs INFO messages
+oh = logging.FileHandler('opencga_loader.out')
+oh.setLevel(logging.DEBUG)
+# create file handler which logs ERROR messages
+eh = logging.FileHandler('opencga_loader.err')
+eh.setLevel(logging.ERROR)
+# create stream handler which logs INFO messages
+console = logging.StreamHandler(stream=sys.stdout)
 console.setLevel(logging.INFO)
-# set a format which is simpler for console use
-formatter = logging.Formatter('%(asctime)s  %(name)s  %(levelname)s: %(message)s')
-# tell the handler to use this format
+# create formatter and add it to the handlers
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s')
+eh.setFormatter(formatter)
+oh.setFormatter(formatter)
 console.setFormatter(formatter)
-# add the handler to the root logger
-logs = logging.getLogger()
-logs.addHandler(console)
-
+# add the handlers to logger
+logger.addHandler(eh)
+logger.addHandler(oh)
+logger.addHandler(console)
 
 # Define status id
 status_id = "name"  # Will be replaced by ID in the next release
@@ -47,28 +41,28 @@ status_id = "name"  # Will be replaced by ID in the next release
 
 def read_metadata(metadata_file):
     """
-    Load the metadata.json file
-    :param metadata_file:
+    Load the information in the metadata file
+    :param metadata_file: JSON file containing the information to be fed to OpenCGA (mandatory fields: 'study')
     :return: dictionary with metadata params
     """
-    metadata = json.load(open(metadata_file))
-    return metadata
+    metadata_dict = json.load(open(metadata_file, 'r'))
+    return metadata_dict
 
-## This file is taken from the main.sh code
-# def read_credentials(cred_file):
+
+# def get_credentials(credentials_file):
 #     """
-#     Load the credentials file
-#     :param credentials file:
-#     :return: dictionary with cred params
+#     Get the credentials from a JSON file to log into the OpenCGA instance
+#     :param credentials_file: JSON file containing the credentials and the host to connect to OpenCGA
+#     :return: dictionary with credentials and host
 #     """
-#     credentials = json.load(open(cred_file))
-#     return credentials
+#     credentials_dict = json.load(open(credentials_file, 'r'))
+#     return credentials_dict
 
 
 def connect_pyopencga(user, password, host):
     """
     Connect to pyopencga
-    :param config: dictionary of parameters.
+    :param credentials: dictionary of credentials and host.
     """
     opencga_config_dict = {'rest': {'host': host}}
     opencga_config = ClientConfiguration(opencga_config_dict)
@@ -76,9 +70,9 @@ def connect_pyopencga(user, password, host):
     oc.login(user=user,
              password=password)
     if oc.token is not None:
-        logging.info("Succefully connected to pyopencga.\nTocken ID: {}".format(oc.token))
+        logger.info("Succefully connected to pyopencga.\nTocken ID: {}".format(oc.token))
     else:
-        logging.error("Failed to connect to pyopencga")
+        logger.error("Failed to connect to pyopencga")
         sys.exit(0)
     return oc
 
@@ -87,144 +81,179 @@ def connect_cli(user, password, opencga_cli):
     """
     Connect OpenCGA CLI to instance
     :param opencga_cli: OpenCGA CLI
-    :param config: configuration dictionary
+    :param credentials: dictionary of credentials and host
     """
     # Launch login on the CLI
     process = subprocess.run([opencga_cli, "users", "login", "-u", user],
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                              input=password)
-    logging.info(process.stdout)
+    logger.info(process.stdout)
     # Check that the login worked
     if process.stderr != "":
-        logs.error("Failed to connect to OpenCGA CLI")
-        logs.error(process.stderr)
+        logger.error("Failed to connect to OpenCGA CLI")
         sys.exit(0)
 
 
-def check_file_status(oc, study, file_name):
+def check_file_status(oc, metadata, file_name, attributes, check_attributes=False):
     """
     Perform file checks. First if file has already been uploaded (file name exists in files.search) and if so, check
     if the file has been already indexed and annotated.
     :param oc: openCGA client
     :param config: configuration dictionary
     :param file_name: name of the file that wants to be uploaded
+    :param attributes: attributes dictionary (keys and values) to be checked
     :return: returns three booleans indicating whether the file has been uploaded, indexed and annotated
     """
 
-    # Init check variables to False
-    uploaded = False
-    indexed = False
-    annotated = False
+    # Init check variables to None
+    uploaded = None
+    indexed = None
+    annotated = None
+    sample_ids = None
 
-    # Check if file has been uploaded
-    logs.info("Checking status of the file")
+    # Search file in OpenCGA
     try:
-        # Query file search in OpenCGA
-        file_search = oc.files.search(study=study, name=file_name)
-
-        # File does not exist
-        if file_search.get_num_results() == 0:
-            logs.info("File {} does not exist in the OpenCGA study {}.".format(file_name, study))
-        # File exists and there's no more than one file with that name
-        elif file_search.get_num_results() == 1:
-            file_status = file_search.get_result(0)['internal']['status'][status_id]
-            # file_status = file_search.get_result(0)['internal']['variant']['status'][status_id]
-            if file_status == "READY":
-                uploaded = True
-                logs.info("File {} already exists in the OpenCGA study {}. This file will not be uploaded again. "
-                          "Path to file: {}".format(file_name, study, file_search.get_result(0)['path']))
-                # Check if file has been indexed (only for those already uploaded)
-                if file_search.get_result(0)['internal']['index']['status'][status_id] == "READY":
-                # if file_search.get_result(0)['internal']['variant']['index']['status'][status_id] == "READY":
-                    indexed = True
-                    if file_search.get_result(0)['internal']['annotationIndex']['status'][status_id] == "READY":
-                    # if file_search.get_result(0)['internal']['variant']['annotationIndex']['status'][status_id] == "READY":
-                        annotated = True
-                    # TODO: Add extra checks for variant index and sample index
-                        # variant:cd ...
-                            #annotationIndex
-                            #secondaryIndex (no lo vamos a hacer)
-
-                        # multifile upload not supported
-                        # sample: !!! get sample ID from file ^^^
-                            # index
-                            # genotypeIndex -- operation/variant/sample/index
-                            # annotationIndex
-            else:
-                # File exists but status is not READY - Needs to be uploaded again
-                logs.info("File {} already exist in the OpenCGA study {} but status is {}. This file will be "
-                          "uploaded again.".format(file_name, study, file_status))
-        # There is more than one file with this name in this study!
-        else:
-            uploaded = True
-            logs.error("File {} has already been indexed in the OpenCGA study {}.\n"
-                       "No further processing will be done.".format(file_name, study))
-            sys.exit(0)
+        file_search = oc.files.search(study=metadata['study'], name=file_name)
     except Exception as e:
-        logs.error(e)
+        logger.exception(msg=e)
         sys.exit(0)
-    return uploaded, indexed, annotated
+
+    # File does not exist
+    if file_search.get_num_results() == 0:
+        uploaded = False
+        logger.info("File {} does not exist in the OpenCGA study {}.".format(file_name, metadata['study']))
+        # File exists and there's no more than one file with that name
+    elif file_search.get_num_results() == 1:
+        # Get statuses
+        file_status = file_search.get_result(0)['internal']['status'][status_id]
+        index_status = file_search.get_result(0)['internal']['index']['status'][status_id]
+        annotation_status = 'NONE'
+        # annotation_status = file_search.get_result(0)['internal']['annotationIndex']['status'][status_id]
+
+        logger.info("Upload status: {}".format(file_status))
+        logger.info("Index status: {}".format(index_status))
+        # logger.info("Annotation status: {}".format(index_status))
+
+        # Check upload status
+        if file_status == "READY":
+            uploaded = True
+            logger.info("File {} already exists in the OpenCGA study {}. "
+                      "Path to file: {}".format(file_name, metadata['study'], file_search.get_result(0)['path']))
+            # Check attributes
+            if check_attributes:
+                for attr in attributes["attributes"]:
+                    if attr in file_search.get_result(0)['attributes']:
+                        if file_search.get_result(0)['attributes'][attr] == attributes["attributes"][attr]:
+                            logger.info("Attribute {} matches the one in OpenCGA: {}".format(attr, attributes["attributes"][attr]))
+                        else:
+                            logger.warning("Attribute {} does not match the one stored in OpenCGA:\n- Provided: {}\n"
+                                           "- Stored: {}".format(attr, attributes["attributes"][attr],
+                                                                 file_search.get_result(0)['attributes'][attr]))
+                    else:
+                        logger.warning("Attribute {} is not included in openCGA".format(attr))
+            # Get Sample(s) ID
+            sample_ids = file_search.get_result(0)['sampleIds']
+        else:
+            uploaded = False
+            # File exists but status is not READY - Needs to be uploaded again
+            logger.info("File {} already exist in the OpenCGA study {} but status is {}. This file needs to be "
+                        "uploaded again.".format(file_name, metadata['study'], file_status))
+
+        # Check variant index status
+        if index_status == "READY":
+            indexed = True
+            logger.info("File {} is indexed in the OpenCGA study {}.".format(file_name, metadata['study']))
+        else:
+            indexed = False
+
+        # Check annotation index status
+        if annotation_status == "READY":
+            annotated = True
+            logger.info("File {} is correctly annotated in the OpenCGA study {}.".format(file_name, metadata['study']))
+        else:
+            annotated = False
+
+    # There is more than one file with this name in this study!
+    else:
+        logger.error("More than one file in OpenCGA with this name {} in study {}".format(file_name, metadata['study']))
+        sys.exit(0)
+
+    # TODO: Add extra checks for variant index and sample index
+    # annotationIndex
+    # secondaryIndex (no lo vamos a hacer)
+    # sample: !!! get sample ID from file ^^^
+    # index
+    # genotypeIndex -- operation/variant/sample/index
+    # annotationIndex
+
+    return uploaded, indexed, annotated, sample_ids
 
 
-def upload_file(opencga_cli, study, file):
+def upload_file(opencga_cli, oc, metadata, file, attributes, file_path):
     """
-    Uploads a file to the OpenCGA instance
+    Uploads a file to the OpenCGA instance and stores it in the file path. It also updates the file to add the
+    DNA nexus file ID as attribute
     :param opencga_cli: OpenCGA CLI
-    :param config: configuration dictionary
+    :param oc: OpenCGA client
+    :param metadata: metadata dictionary
+    :param file: VCF file to upload
+    :param attributes: attributes to be added to the file
+    :param file_path: directory inside OpenCGA where the file should be stored (default: data/)
     """
-    process = subprocess.Popen([opencga_cli, "files", "upload", "--input", file, "--study", study],
-                               stdout=PIPE, stderr=PIPE, text=True)
+    # Run upload using the bash CLI
+    process = subprocess.Popen([opencga_cli, "files", "upload", "--input", file, "--study", metadata['study'],
+                                "--catalog-path", file_path, "--parents"], stdout=PIPE, stderr=PIPE, text=True)
     process.wait()  # Wait until the execution is complete to continue with the program
     stdout, stderr = process.communicate()
+    # Define Catalog path
+    catalog_path = stdout.split('\t')[18]
     if stderr != "":
-        logs.error(str(stderr))
+        logger.error(str(stderr))
         sys.exit(0)
     else:
-        logs.info("File uploaded successfully. Path to file in OpenCGA catalog: {}".format(stdout.split('\t')[18]))
-        logs.info(stdout)
-
-
-def annotate_file(oc, study):
-    """
-    Launches an OpenCGA job to force the annotation of any new variants added to the database.
-    :param oc: OpenCGA client
-    :param config: configuration dictionary
-    """
-    annotate_job = oc.variant_operations.index_variant_annotation(study=study, data={})
-    logs.info("Annotating new variants in study {} with job ID: {}".format(study,
-                                                                           annotate_job.get_result(0)['id']))
+        logger.info("File uploaded successfully. Path to file in OpenCGA catalog: {}".format(catalog_path))
+        logger.info("\n" + stdout)
+    # Update file to contain the provided attributes
     try:
-        oc.wait_for_job(response=annotate_job.get_response(0))
-    except ValueError as ve:
-        logs.error("OpenCGA annotation job failed. {}".format(ve))
-        sys.exit(0)
-    # TODO: Add job logs to our logs
+        oc.files.update(study=metadata['study'], files=catalog_path, data=attributes)
+    except Exception as e:
+        logger.error("Failed to add the attributes to the file in OpenCGA")
 
 
-def index_file(oc, study, file):
+def index_file(oc, metadata, file):
     """
     Indexes a VCF that has already been uploaded to OpenCGA
     :param oc: OpenCGA client
-    :param config: configuration dictionary
+    :param metadata: metadata dictionary
     :param file: name of the VCF file already uploaded in OpenCGA
     """
-    index_job = oc.variants.run_index(study=study, data={"file": file})
-    logs.info("Indexing file {} with job ID: {}".format(file, index_job.get_result(0)['id']))
+    index_job = oc.variants.run_index(study=metadata['study'], data={"file": file})
+    logger.info("Indexing file {} with job ID: {}".format(file, index_job.get_result(0)['id']))
     try:
         oc.wait_for_job(response=index_job.get_response(0))
     except ValueError as ve:
-        logs.error("OpenCGA failed to index the file. {}".format(ve))
+        logger.exception("OpenCGA failed to index the file. {}".format(ve))
         sys.exit(0)
-    # TODO: Add job logs to our logs
 
-    # job_info = oc.jobs.info(study=study, jobs=index_job.get_result(0)['id'])
-    # job_status = job_info.get_result(0)['internal']['status'][status_id]
-    # if job_status == "DONE":
-    #     oc.variant_operations.index_variant_annotation()
+
+def annotate_variants(oc, metadata):
+    """
+    Launches an OpenCGA job to force the annotation of any new variants added to the database.
+    :param oc: OpenCGA client
+    :param metadata: metadata dictionary
+    """
+    annotate_job = oc.variant_operations.index_variant_annotation(study=metadata['study'], data={})
+    logger.info("Annotating new variants in study {} with job ID: {}".format(metadata['study'],
+                                                                           annotate_job.get_result(0)['id']))
+    try:
+        oc.wait_for_job(response=annotate_job.get_response(0))
+        oc.jobs.info(study=metadata['study'], jobs=annotate_job.get_result(0)['id'])
+    except ValueError as ve:
+        logger.exception("OpenCGA annotation job failed. {}".format(ve))
+        sys.exit(0)
 
 
 if __name__ == '__main__':
-
     # Set the arguments of the command line
     parser = argparse.ArgumentParser(description=' Index VCFs from DNANexus into OpenCGA')
     parser.add_argument('--metadata', help='JSON file containing the metadata (minimum required information: "study")')
@@ -233,65 +262,70 @@ if __name__ == '__main__':
     parser.add_argument('--user', help='OpenCGA user')
     parser.add_argument('--password', help='OpenCGA password')
     parser.add_argument('--vcf', metavar='vcf', help='Input vcf file')
+    parser.add_argument('--dnanexus_fid', help='DNA nexus file ID')
     args = parser.parse_args()
 
-    # Get location of the script to define the default location of the config file
-    metadata = None
-    if args.metadata is not None:
-        metadata = args.metadata
-        logs.info("Input metadata json: {}".format(metadata))
-    else:
-        # If cli is not passed as an argument nor is in the path, raise and error and exit.
-        logs.error("No metadata.json file found")
+    # Check the location of the OpenCGA CLI
+    if not os.path.isfile(args.cli):
+        logger.error("OpenCGA CLI not found.")
         sys.exit(0)
+    opencga_cli = args.cli
 
-    # Define location of the OpenCGA client
-    opencga_cli = None
-    if args.cli is not None:
-        # If cli is passed as an argument, use this
-        opencga_cli = args.cli
-        logs.info("Input OpenCGA CLI: {}".format(opencga_cli))
-    else:
-        # If cli is not passed as an argument raise and error and exit.
-        logs.error("OpenCGA CLI not found.")
-        sys.exit(0)
-
-    # Read metadata file AND define study variable
+    # Read metadata file
     metadata = read_metadata(metadata_file=args.metadata)
-    if metadata['study'] is not None:
-        study = metadata['study']
-        logs.info("OpenCGA study to operate {}".format(study))
-    else:
-        logs.error("OpenCGA study not found in metadata file. Study id is mandatory.")
-        sys.exit(0)
+
+    # Read credentials file
+    #credentials = get_credentials(credentials_file=args.credentials)
 
     # Login OpenCGA CLI
-    connect_cli(user=args.user, password=args.password, opencga_cli=opencga_cli)
+    connect_cli(args.user, args.password, opencga_cli)
 
     # Create pyopencga client
-    oc = connect_pyopencga(user=args.user, password=args.password, host=args.host)
+    oc = connect_pyopencga(args.user, args.password, args.host)
 
-    # COMMENT FROM HERE
-    # Check if file has been already uploaded and indexed
-    uploaded, indexed, annotated = check_file_status(oc=oc, study=study, file_name=os.path.basename(args.vcf))
+    # Get today's date to store the file in a directory named as "YearMonth" (e.g. 202112 = December 2021)
+    date_folder = datetime.date.today().strftime("%Y%m")
+    file_path = "test_laura/" + date_folder
 
-    # Depending on the status of the file we will upload it and/or index it
+    # Format DNA Nexus file ID to attributes
+    dnanexus_attributes = {"attributes": {
+                                "DNAnexusFileId": args.dnanexus_fid}}
+
+    # Check the status of the file and execute the necessary actions
+    # Check upload status
+    uploaded, indexed, annotated, sample_ids = check_file_status(oc=oc, metadata=metadata,
+                                                                file_name=os.path.basename(args.vcf),
+                                                                attributes=dnanexus_attributes, check_attributes=True)
+    # if uploaded is not None:
     if not uploaded:
-        # Upload file
-        upload_file(opencga_cli=opencga_cli, study=study, file=args.vcf)
-    if not indexed:
-        # Index file
-        index_file(oc=oc, study=study, file=os.path.basename(args.vcf))
-    if not annotated:
-        # Annotate file
-        annotate_file(oc=oc, study=study)
+        upload_file(opencga_cli=opencga_cli, oc=oc, metadata=metadata, file=args.vcf, file_path=file_path,
+                    attributes=dnanexus_attributes)
 
-    # Check again the status of the file
-    uploaded, indexed, annotated = check_file_status(oc=oc, study=study, file_name=os.path.basename(args.vcf))
-    if uploaded and indexed and annotated:
-        logs.info("File {} has been successfully uploaded, indexed and annotated.")
-    else:
-        logs.error("Something went wrong. Status of file {}:\n\t- uploaded: {}\n\t- indexed: {}\n\t- annotated: {}\n"
-                   "Please check the logs to identify the problem.".format(args.vcf, uploaded, indexed, annotated))
+    # Check index status
+    uploaded, indexed, annotated, sample_ids = check_file_status(oc=oc, metadata=metadata,
+                                                                file_name=os.path.basename(args.vcf),
+                                                                attributes=dnanexus_attributes, check_attributes=True)
+    if indexed is not None:
+        if not indexed:
+            index_file(oc=oc, metadata=metadata, file=os.path.basename(args.vcf))
 
-    handler.close()
+    # Check variant annotation status
+    # NOTE: Cannot be done at the moment
+    uploaded, indexed, annotated, sample_ids = check_file_status(oc=oc, metadata=metadata,
+                                                                file_name=os.path.basename(args.vcf),
+                                                                attributes=dnanexus_attributes, check_attributes=True)
+    if annotated is not None:
+        if not annotated:
+            annotate_variants(oc=oc, metadata=metadata)
+
+    # # Check again the status of the file
+    # uploaded, indexed, annotated = check_file_status(oc=oc, config=config, file_name=os.path.basename(args.vcf))
+    # if uploaded and indexed and annotated:
+    #     logger.info("File {} has been successfully uploaded, indexed and annotated.")
+    # else:
+    #     logger.error("Something went wrong. Status of file {}:\n\t- uploaded: {}\n\t- indexed: {}\n\t- annotated: {}\n"
+    #                "Please check the logs to identify the problem.".format(args.vcf, uploaded, indexed, annotated))
+
+    oh.close()
+    eh.close()
+    console.close()

@@ -17,10 +17,11 @@
 
 main() {
 
-    echo "Value of input_vcf: '${input_vcf[@]}'"
+
+    echo "### Define applet inputs"
+    echo "Value of input_vcf: '$input_vcf'"
     echo "Value of input_credentials: '$credentials'"
     echo "Value of input_metadata: '$input_metadata'"
-
 
     # The following line(s) use the dx command-line tool to download your file
     # inputs to the local file system using variable names for the filenames. To
@@ -37,17 +38,20 @@ main() {
     }
 
     # Download credentials
+    echo "### Downloading credentials"
     dx download "$credentials" -o credentials
     # Get file name
-    name=$(dx describe "$credentials" --name)
-    echo "Credentials file $name has been downloaded"
+    credentials_name=$(dx describe "$credentials" --name)
+    echo "Credentials file $credentials_name has been downloaded \n"
 
     # Read the credentials
+    echo "### Reading opencga cli id from credentials"
     read_cred credentials
     cli=$(echo $cli | tr -d \")
-    echo "opencga cli dna nexus id is $cli"
+    echo "Opencga cli dnanexus id is: $cli \n"
 
     # Download and unpack opencga ($cli variable is taken from credentials)
+    echo "### Downloading and untar opencga cli"
     dx download "$cli" -o input_cli
     cli_tar=$(dx describe "$cli" --name)
     echo "Compressed cli: $cli_tar"
@@ -58,13 +62,15 @@ main() {
     if [ $check != "opencga.sh" ]; then
       dx-jobutil-report-error "opencga.sh not found in the provided cli folder. As a result no further actions can be performed"
     else
-      echo "$check is ready to use"
+      echo "$check is ready to use \n"
     fi
 
-    # Download metadata file
+    # Download metadata file and name it metadata
+    echo "### Downloading metadata file"
     dx download "$input_metadata" -o metadata
-    name=$(dx describe "$input_metadata" --name)
-    echo "Metadata file $name has been downloaded"
+    # Get file name
+    metadata_name=$(dx describe "$input_metadata" --name)
+    echo "Metadata file $metadata_name has been downloaded \n"
 
     # Check arguments that will be passed to the py script
     # echo " The user: $user"
@@ -72,39 +78,38 @@ main() {
     # echo " The host: $host"
     # echo " The cli: /home/dnanexus/$cli_untar/bin/opencga.sh"
 
+    # Download VCF file
+    echo "### Downloading input VCF file"
     # process one VCF at a time
-    echo "$input_vcf"
-    # Download file. Don't rename it because we need the name as it is
     dx download "$input_vcf"
     # Get file name
     vcf_name=$(dx describe "$input_vcf" --name)
-    echo "File ${vcf_name} has been downloaded"
+    dnanexus_fid=$(dx describe "${input_vcf}" --json | jq -r '.id')
+    echo "File ${vcf_name} with dnanexus id ${dnanexus_id} has been downloaded \n"
 
-    #Display all the files in current directory --> just for testing
-    pwd
-    ls -l
+    #Display all the files in current directory --> just for testing    ls
 
     # Install python dependencies
+    echo "### installing requirements from requirements.txt"
     pip install -r /home/dnanexus/requirements.txt -q
 
+
     # Run the python script
-    echo "### Python script starts here:"
+    echo "### Python processing starts here:"
     opencga_cmd="python3 opencga_upload_and_index.py --metadata /home/dnanexus/metadata \
-                                                    --host $host
+                                                    --host $host \
                                                     --user $user \
                                                     --password $password \
                                                     --cli /home/dnanexus/$cli_untar/bin/opencga.sh \
-                                                    --vcf /home/dnanexus/${vcf_name}"
+                                                    --vcf /home/dnanexus/${vcf_name} \
+                                                    --dnanexus_fid ${dnanexus_fid}"
     # TODO Comment this echo
-    echo ${opencga_cmd}
+    #echo ${opencga_cmd}
     eval ${opencga_cmd}
     rm ${vcf_name}
 
     #Display all the files in current directory --> just for testing
     # ls -l
-    # Testing
-    echo "Now I'm going to cat the log"
-    cat opencga_loader.log
 
     # To report any recognized errors in the correct format in
     # $HOME/job_error.json and exit this script, you can use the
@@ -125,14 +130,20 @@ main() {
     # to see more options to set metadata.
     echo "File $vcf_name is loaded into the opencga study $study" > /home/dnanexus/output_file
 
+    # Print which files are in the dir to see what to return
+    ls
+
     output_file=$(dx upload output_file --brief)
-    output_loader=$(dx upload opencga_loader.log)
+    opencga_out=$(dx upload opencga_loader.out)
+    opencga_err=$(dx upload opencga_loader.err)
 
     # The following line(s) use the utility dx-jobutil-add-output to format and
     # add output variables to your job's output as appropriate for the output
     # class.  Run "dx-jobutil-add-output -h" for more information on what it
     # does.
 
-    ### ADD OUTPUT LOADER HERE!
+    ### Check if this works
     dx-jobutil-add-output output_file "$output_file" --class=file
+    dx-jobutil-add-output opencga_out "$opencga_out" --class=file
+    dx-jobutil-add-output opencga_err "$opencga_err" --class=file
 }

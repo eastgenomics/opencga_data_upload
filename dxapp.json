@@ -37,6 +37,20 @@
        "help": "One or more vcf files to be uploaded by opencga",
        "class": "file",
        "patterns": ["*"]
+     },
+     {
+       "name": "opencga_out",
+       "label": "Loader log",
+       "help": "Log of the jobs in OpenCGA",
+       "class": "file",
+       "patterns": ["*.out"]
+     },
+     {
+       "name": "opencga_error",
+       "label": "Loader err",
+       "help": "error of the jobs in OpenCGA",
+       "class": "file",
+       "patterns": ["*.err"]
      }
    ],
   "runSpec": {
