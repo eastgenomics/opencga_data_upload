@@ -40,27 +40,37 @@ main() {
     # Get the original name of the VCF file
     vcf_name=$(dx describe "${input_vcf}" --name)
 
+    echo "Downloading input files"
     dx download "${input_vcf}" -o /home/dnanexus/in/"${vcf_name}"
     dx download "${input_metadata}" -o /home/dnanexus/in/metadata.json
     dx download "${input_credentials}" -o /home/dnanexus/in/credentials.json
 
     # Download openCGA CLI and uncompress
+    echo "Getting the OpenCGA CLI"
     dx download ${opencga_cli_file_id}
     cli_name=$(dx describe ${opencga_cli_file_id} --name)
-    tar -xzf /home/dnanexus/"${cli_name}"
+    mkdir -p /home/dnanexus/opencga_cli && tar -xzf ${cli_name} -C /home/dnanexus/opencga_cli --strip-components 1
+    opencga_cli=$(ls /home/dnanexus/opencga_cli/bin)
+    if [ "${opencga_cli}" != "opencga.sh" ]; then
+      dx-jobutil-report-error "opencga.sh not found in the provided cli folder. As a result no further actions can be performed"
+    else
+      echo "${opencga_cli} is ready to use"
+    fi
 
     # Get DNAnexus file ID
-    dnanexus_fid=$(dx describe ${opencga_cli_file_id} --json | \
-    python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
+    echo "Obtaining VCF file ID"
+    dnanexus_fid=$(dx describe "${input_vcf}" --json | jq -r '.id')
 
     # Install python dependencies
+    echo "Installing requirements"
     pip install --user -r /home/dnanexus/requirements.txt -q
 
     # Run opencga load
+    echo "Launching OpenCGA upload"
     opencga_cmd="python3 opencga_upload_and_index.py --metadata /home/dnanexus/in/metadata.json \
                                                      --credentials /home/dnanexus/in/credentials.json \
-                                                     --vcf /home/dnanexus/in/"${vcf_name}" \
-                                                     --cli /home/dnanexus/${cli_name}/bin/opencga.sh \
+                                                     --vcf /home/dnanexus/in/${vcf_name} \
+                                                     --cli /home/dnanexus/opencga_cli/bin/opencga.sh \
                                                      --dnanexus_fid ${dnanexus_fid}"
     echo "${opencga_cmd}"
     eval "${opencga_cmd}"
@@ -68,12 +78,19 @@ main() {
     # To report any recognized errors in the correct format in
     # $HOME/job_error.json and exit this script, you can use the
     # dx-jobutil-report-error utility as follows:
-    #
-#    if [[ file exists]]:
-#      cat
-#       dx-jobutil-report-error "My error message"
 
-    #
+    if [ -f /home/dnanexus/opencga_loader.err ]; then
+        if [ -s /home/dnanexus/opencga_loader.err ]; then
+            cat
+                dx-jobutil-report-error "ERROR: Failed to load VCF ${vcf_name} into OpenCGA. See
+                /home/dnanexus/opencga_loader.err for more details."
+        else
+            echo "VCF ${vcf_name} was loaded successfully to OpenCGA"
+        fi
+    fi
+
+    cat opencga_loader.log
+
     # Note however that this entire bash script is executed with -e
     # when running in the cloud, so any line which returns a nonzero
     # exit code will prematurely exit the script; if no error was
@@ -86,7 +103,7 @@ main() {
     # but you can change that behavior to suit your needs.  Run "dx upload -h"
     # to see more options to set metadata.
 
-    output=$(dx upload output --brief)
+    output=$(dx upload opencga_loader.log --brief)
 
     # The following line(s) use the utility dx-jobutil-add-output to format and
     # add output variables to your job's output as appropriate for the output

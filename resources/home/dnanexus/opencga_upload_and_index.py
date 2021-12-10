@@ -22,14 +22,18 @@ oh.setLevel(logging.DEBUG)
 # create file handler which logs ERROR messages
 eh = logging.FileHandler('opencga_loader.err')
 eh.setLevel(logging.ERROR)
+# create stream handler which logs INFO messages
+console = logging.StreamHandler(stream=sys.stdout)
+console.setLevel(logging.INFO)
 # create formatter and add it to the handlers
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s')
 eh.setFormatter(formatter)
 oh.setFormatter(formatter)
+console.setFormatter(formatter)
 # add the handlers to logger
 logger.addHandler(eh)
 logger.addHandler(oh)
-
+logger.addHandler(console)
 
 # Define status id
 status_id = "name"  # Will be replaced by ID in the next release
