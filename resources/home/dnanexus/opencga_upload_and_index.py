@@ -379,6 +379,12 @@ if __name__ == '__main__':
         if not annotated:
             annotate_variants(oc=oc, metadata=metadata)
 
+    # Run sample variant stats
+    calculate_sample_variants_stats(oc=oc, metadata=metadata, sample_ids=sample_ids)
+
+    # Run variant sample index
+    build_variant_sample_index(oc=oc, metadata=metadata, sample_ids=sample_ids)
+
     # # Check again the status of the file
     # uploaded, indexed, annotated = check_file_status(oc=oc, config=config, file_name=os.path.basename(args.vcf))
     # if uploaded and indexed and annotated:
