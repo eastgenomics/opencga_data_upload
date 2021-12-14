@@ -66,7 +66,7 @@ def connect_pyopencga(credentials):
     """
     opencga_config_dict = {'rest': {'host': credentials['host']}}
     opencga_config = ClientConfiguration(opencga_config_dict)
-    oc = OpencgaClient(opencga_config)
+    oc = OpencgaClient(opencga_config, auto_refresh=True)
     oc.login(user=credentials['user'],
              password=credentials['password'])
     if oc.token is not None:
@@ -230,6 +230,13 @@ def index_file(oc, metadata, file):
     logger.info("Indexing file {} with job ID: {}".format(file, index_job.get_result(0)['id']))
     try:
         oc.wait_for_job(response=index_job.get_response(0))
+        status = oc.jobs.info(study=metadata['study'], jobs=index_job.get_result(0)['id'])
+        if status.get_result(0)['execution']['status']['name'] == 'DONE':
+            logger.info("OpenCGA job index file completed successfully")
+        else:
+            logger.info(
+                "OpenCGA job index file failed with status {}".format(
+                    status.get_result(0)['execution']['status']['name']))
     except ValueError as ve:
         logger.exception("OpenCGA failed to index the file. {}".format(ve))
         sys.exit(0)
@@ -246,9 +253,65 @@ def annotate_variants(oc, metadata):
                                                                            annotate_job.get_result(0)['id']))
     try:
         oc.wait_for_job(response=annotate_job.get_response(0))
-        oc.jobs.info(study=metadata['study'], jobs=annotate_job.get_result(0)['id'])
+        status = oc.jobs.info(study=metadata['study'], jobs=annotate_job.get_result(0)['id'])
+        if status.get_result(0)['execution']['status']['name'] == 'DONE':
+            logger.info("OpenCGA job annotate variants completed successfully")
+        else:
+            logger.info(
+                "OpenCGA job annotate variants failed with status {}".format(
+                    status.get_result(0)['execution']['status']['name']))
     except ValueError as ve:
         logger.exception("OpenCGA annotation job failed. {}".format(ve))
+        sys.exit(0)
+
+
+def calculate_sample_variants_stats(oc, metadata, sample_ids):
+    """
+    Compute sample variant stats for the selected list of samples
+    :param oc: OpenCGA client
+    :param metadata: metadata dictionary
+    :param sample_ids: list of sample IDs to calculate stats on
+    """
+    sample_variant_stats_job = oc.variants.run_sample_stats(study=metadata['study'], data={'sample': sample_ids})
+    logger.info("Computing sample variant stats for {} with job ID: {}".format(', '.join(sample_ids),
+                                                                               sample_variant_stats_job.get_result(0)['id']))
+    try:
+        oc.wait_for_job(response=sample_variant_stats_job.get_response(0))
+        status = oc.jobs.info(study=metadata['study'], jobs=sample_variant_stats_job.get_result(0)['id'])
+        if status.get_result(0)['execution']['status']['name'] == 'DONE':
+            logger.info(
+                "OpenCGA job sample variant stats completed successfully for sample(s).".format(', '.join(sample_ids)))
+        else:
+            logger.info(
+                "OpenCGA job sample variant stats failed with status {}.".format(
+                    status.get_result(0)['execution']['status']['name']))
+    except ValueError as ve:
+        logger.exception("OpenCGA job sample variant stats failed. {}".format(ve))
+        sys.exit(0)
+
+
+def build_variant_sample_index(oc, metadata, sample_ids):
+    """
+    Build and annotate the sample index for the selected list of samples
+    :param oc: OpenCGA client
+    :param metadata: metadata dictionary
+    :param sample_ids: list of sample IDs
+    """
+    variant_sample_index_job = oc.operations.index_variant_sample(study=metadata['study'], data={'sample': sample_ids})
+    logger.info("Building variant sample indices for sample(s) {} with job ID: {}".format(', '.join(sample_ids),
+                                                                        variant_sample_index_job.get_result(0)['id']))
+    try:
+        oc.wait_for_job(response=variant_sample_index_job.get_response(0))
+        status = oc.jobs.info(study=metadata['study'], jobs=variant_sample_index_job.get_result(0)['id'])
+        if status.get_result(0)['execution']['status']['name'] == 'DONE':
+            logger.info(
+                "OpenCGA job variant sample index completed successfully for sample(s).".format(', '.join(sample_ids)))
+        else:
+            logger.info(
+                "OpenCGA job variant sample index failed with status {}.".format(
+                    status.get_result(0)['execution']['status']['name']))
+    except ValueError as ve:
+        logger.exception("OpenCGA job svariant sample index failed. {}".format(ve))
         sys.exit(0)
 
 
@@ -311,6 +374,7 @@ if __name__ == '__main__':
     uploaded, indexed, annotated, sample_ids = check_file_status(oc=oc, metadata=metadata,
                                                                 file_name=os.path.basename(args.vcf),
                                                                 attributes=dnanexus_attributes, check_attributes=True)
+    annotated = True
     if annotated is not None:
         if not annotated:
             annotate_variants(oc=oc, metadata=metadata)

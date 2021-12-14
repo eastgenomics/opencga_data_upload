@@ -15,11 +15,6 @@
 # See https://documentation.dnanexus.com/developer for tutorials on how
 # to modify this file.
 
-# FILE ID POINTING TO THE OPENCGA CLI
-# --------------------------------------------
-# If a new version of OpenCGA is released, this file ID needs to be changed
-opencga_cli_file_id='project-G5XXyY84XjQPZKJfKX0ZQZpz:file-G6XPFF04XjQP8Z175fG1q8Y7'
-
 
 main() {
     echo "Summary of data provided:"
@@ -33,8 +28,15 @@ main() {
     # "$variable" --name".
     # Fill in your application code here.
 
+    # Define a function for reading credentials.json
+    read_cred () {
+        user=$(jq .user "${1}")
+        password=$(jq .password "${1}")
+        host=$(jq .host "${1}")
+        opencga_cli_file_id=$(jq .opencga_cli_file_id "${1}")
+    }
+
     # Download inputs in the "in" folder
-    # ------------------------------------------------
     mkdir -p /home/dnanexus/in
 
     # Get the original name of the VCF file
@@ -45,16 +47,19 @@ main() {
     dx download "${input_metadata}" -o /home/dnanexus/in/metadata.json
     dx download "${input_credentials}" -o /home/dnanexus/in/credentials.json
 
+    # Read credentials file
+    read_cred /home/dnanexus/in/credentials.json
+
     # Download openCGA CLI and uncompress
     echo "Getting the OpenCGA CLI"
-    dx download ${opencga_cli_file_id}
-    cli_name=$(dx describe ${opencga_cli_file_id} --name)
+    dx download "${opencga_cli_file_id}"
+    cli_name=$(dx describe "${opencga_cli_file_id}" --name)
     mkdir -p /home/dnanexus/opencga_cli && tar -xzf ${cli_name} -C /home/dnanexus/opencga_cli --strip-components 1
     opencga_cli=$(ls /home/dnanexus/opencga_cli/bin)
     if [ "${opencga_cli}" != "opencga.sh" ]; then
       dx-jobutil-report-error "opencga.sh not found in the provided cli folder. As a result no further actions can be performed"
     else
-      echo "${opencga_cli} is ready to use"
+      echo "${opencga_cli} in ${cli_name} is ready to use"
     fi
 
     # Get DNAnexus file ID
