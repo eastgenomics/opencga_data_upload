@@ -33,7 +33,7 @@ main() {
         user=$(jq .user "${1}")
         password=$(jq .password "${1}")
         host=$(jq .host "${1}")
-        opencga_cli_file_id=$(jq .opencga_cli_file_id "${1}")
+        opencga_cli_file_id=$(jq -r .opencga_cli_file_id "${1}")
     }
 
     # Download inputs in the "in" folder
@@ -52,7 +52,7 @@ main() {
 
     # Download openCGA CLI and uncompress
     echo "Getting the OpenCGA CLI"
-    dx download "${opencga_cli_file_id}"
+    dx download ${opencga_cli_file_id}
     cli_name=$(dx describe "${opencga_cli_file_id}" --name)
     mkdir -p /home/dnanexus/opencga_cli && tar -xzf ${cli_name} -C /home/dnanexus/opencga_cli --strip-components 1
     opencga_cli=$(ls /home/dnanexus/opencga_cli/bin)
@@ -94,7 +94,7 @@ main() {
         fi
     fi
 
-    cat opencga_loader.log
+    ls
 
     # Note however that this entire bash script is executed with -e
     # when running in the cloud, so any line which returns a nonzero
@@ -108,12 +108,15 @@ main() {
     # but you can change that behavior to suit your needs.  Run "dx upload -h"
     # to see more options to set metadata.
 
-    output=$(dx upload opencga_loader.log --brief)
+    opencga_out=$(dx upload /home/dnanexus/opencga_loader.out --brief)
+    opencga_err=$(dx upload /home/dnanexus/opencga_loader.err --brief)
 
     # The following line(s) use the utility dx-jobutil-add-output to format and
     # add output variables to your job's output as appropriate for the output
     # class.  Run "dx-jobutil-add-output -h" for more information on what it
     # does.
 
-    dx-jobutil-add-output output "$output" --class=file
+
+    dx-jobutil-add-output opencga_out "${opencga_out}" --class=file
+    dx-jobutil-add-output opencga_err "${opencga_err}" --class=file
 }

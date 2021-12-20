@@ -297,7 +297,7 @@ def build_variant_sample_index(oc, metadata, sample_ids):
     :param metadata: metadata dictionary
     :param sample_ids: list of sample IDs
     """
-    variant_sample_index_job = oc.operations.index_variant_sample(study=metadata['study'], data={'sample': sample_ids})
+    variant_sample_index_job = oc.variant_operations.index_sample_genotype(study=metadata['study'], data={'sample': sample_ids})
     logger.info("Building variant sample indices for sample(s) {} with job ID: {}".format(', '.join(sample_ids),
                                                                         variant_sample_index_job.get_result(0)['id']))
     try:
@@ -380,10 +380,10 @@ if __name__ == '__main__':
             annotate_variants(oc=oc, metadata=metadata)
 
     # Run sample variant stats
-    calculate_sample_variants_stats(oc=oc, metadata=metadata, sample_ids=sample_ids)
+    #calculate_sample_variants_stats(oc=oc, metadata=metadata, sample_ids=sample_ids)
 
     # Run variant sample index
-    build_variant_sample_index(oc=oc, metadata=metadata, sample_ids=sample_ids)
+    #build_variant_sample_index(oc=oc, metadata=metadata, sample_ids=sample_ids)
 
     # # Check again the status of the file
     # uploaded, indexed, annotated = check_file_status(oc=oc, config=config, file_name=os.path.basename(args.vcf))

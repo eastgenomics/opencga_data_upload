@@ -32,11 +32,18 @@
   ],
   "outputSpec": [
     {
-      "name": "output",
-      "label": "Output info",
+      "name": "opencga_out",
+      "label": "Output logs",
       "class": "file",
-      "patterns": ["*"],
+      "patterns": ["*.out"],
       "help": "Output file with information about the process"
+    },
+    {
+      "name": "opencga_err",
+      "label": "Output errors",
+      "class": "file",
+      "patterns": ["*.err"],
+      "help": "Error file in case any occurred during the upload"
     }
   ],
   "runSpec": {
