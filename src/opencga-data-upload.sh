@@ -12,50 +12,45 @@ main() {
         user=$(jq .user "${1}")
         password=$(jq .password "${1}")
         host=$(jq .host "${1}")
-        opencga_cli_file_id=$(jq -r .opencga_cli_file_id "${1}")
     }
 
     # Make required folders
-    mkdir -p /home/dnanexus/in /home/dnanexus/packages 
+    mkdir -p packages input
 
     # Unpack and install python dependencies
     tar xf python_packages.tar.gz -C packages
     python3 -m pip install --no-index --no-deps packages/*
 
-    # Get the original name of the VCF file
-    vcf_name=$(dx describe "${input_vcf}" --name)
 
     echo "Downloading input files"
     dx-download-all-inputs --parallel
 
+    #Add all inputs in the same folder to enable indeces to be found.
+    find ~/in -type f -name "*" -print0 | xargs -0 -I {} mv {} ~/
+
     # Read credentials file
-    read_cred /home/dnanexus/in/credentials.json
+    read_cred /home/dnanexus/input/credentials.json
 
     # Download openCGA CLI and uncompress
     echo "Getting the OpenCGA CLI"
-    dx download ${opencga_cli_file_id}
-    cli_name=$(dx describe "${opencga_cli_file_id}" --name)
-    mkdir -p /home/dnanexus/opencga_cli && tar -xzf ${cli_name} -C /home/dnanexus/opencga_cli --strip-components 1
+    mkdir -p /home/dnanexus/opencga_cli && tar -xzf ${opencga_client_name} -C /home/dnanexus/opencga_cli --strip-components 1
     opencga_cli=$(ls /home/dnanexus/opencga_cli/bin)
     if [ "${opencga_cli}" != "opencga.sh" ]; then
       dx-jobutil-report-error "opencga.sh not found in the provided cli folder. As a result no further actions can be performed"
     else
-      echo "${opencga_cli} in ${cli_name} is ready to use"
+      echo "${opencga_cli} in ${opencga_client_name} is ready to use"
     fi
 
     # Get DNAnexus file ID
     echo "Obtaining VCF file ID"
     dnanexus_fid=$(dx describe "${input_vcf}" --json | jq -r '.id')
 
-    # Install python dependencies
-    echo "Installing requirements"
-    pip install --user -r /home/dnanexus/requirements.txt -q
 
     # Run opencga load
     echo "Launching OpenCGA upload"
-    opencga_cmd="python3 opencga_upload_and_index.py --metadata /home/dnanexus/in/metadata.json \
-                                                     --credentials /home/dnanexus/in/credentials.json \
-                                                     --vcf /home/dnanexus/in/${vcf_name} \
+    opencga_cmd="python3 opencga_upload_and_index.py --metadata /home/dnanexus/metadata.json \dnanexus_fid
+                                                     --credentials /home/dnanexus/credentials.json \
+                                                     --vcf /home/dnanexus/${input_vcf_name} \
                                                      --cli /home/dnanexus/opencga_cli/bin/opencga.sh \
                                                      --dnanexus_fid ${dnanexus_fid}"
     echo "${opencga_cmd}"
@@ -68,10 +63,10 @@ main() {
     if [ -f /home/dnanexus/opencga_loader.err ]; then
         if [ -s /home/dnanexus/opencga_loader.err ]; then
             cat
-                dx-jobutil-report-error "ERROR: Failed to load VCF ${vcf_name} into OpenCGA. See
+                dx-jobutil-report-error "ERROR: Failed to load VCF ${input_vcf_name} into OpenCGA. See
                 /home/dnanexus/opencga_loader.err for more details."
         else
-            echo "VCF ${vcf_name} was loaded successfully to OpenCGA"
+            echo "VCF ${input_vcf_name} was loaded successfully to OpenCGA"
         fi
     fi
 
