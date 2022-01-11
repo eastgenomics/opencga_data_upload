@@ -1,24 +1,29 @@
 {
-  "name": "opencga-data-upload",
-  "title": "opencga-data-upload",
+  "name": "eggd_opencga-data-upload",
+  "title": "eggd_opencga-data-upload",
   "summary": "This app takes VCFs from DNAnexus and uploads, indexes and annotates them into a particular OpenCGA study",
   "dxapi": "1.0.0",
-  "version": "0.0.1",
+  "version": "1.0.0",
+  "openSource": true,  
+  "properties": {
+    "github release": "1.0.0"
+  },
+
   "inputSpec": [
     {
       "name": "input_vcf",
       "label": "VCF to be uploaded",
-      "class": "array:file",
+      "class": "file",
       "optional": false,
       "patterns": ["*.vcf", "*.vcf.gz"],
-      "help": ""
+      "help": "VCF file to be uploaded."
     },
     {
       "name": "input_metadata",
       "label": "Metadata file",
       "class": "file",
       "optional": false,
-      "patterns": ["*"],
+      "patterns": ["*.json"],
       "help": "JSON file containing information about the study and the samples"
     },
     {
@@ -26,8 +31,23 @@
       "label": "Credentials file",
       "class": "file",
       "optional": false,
-      "patterns": ["*"],
+      "patterns": ["*.json"],
       "help": "JSON file containing the credentials and host for access to the OpenCGA instance"
+    },
+    {
+      "name": "opencga_client",
+      "label": "Client for opencga",
+      "class": "file",
+      "optional": false,
+      "patterns": ["*.json"],
+      "help": "JSON file containing the credentials and host for access to the OpenCGA instance",
+      "default": [
+        {
+          "$dnanexus_link": {
+            "project": "project-G7K3K3j4yB9P0kkjFXQ4yqjy",
+            "id": "file-G6XPFF04XjQP8Z175fG1q8Y7"
+          }
+        },
     }
   ],
   "outputSpec": [
@@ -59,8 +79,23 @@
     "file": "src/opencga-data-upload.sh",
     "distribution": "Ubuntu",
     "release": "20.04",
-    "version": "0"
+    "version": "0",
+    "assetDepends": [
+      {
+        "name": "openjdk-11+28",
+        "project": "project-G7K3K3j4yB9P0kkjFXQ4yqjy",
+        "folder": "/app_assets/java/openjdk-11+28",
+        "version": "1.0.0"
+      }
+    ]
   },
+  "developers":[
+    "user-toutoua",
+    "org-emee_1"
+  ],
+  "authorizedUsers": [
+    "org-emee_1"
+  ],
   "access": {
     "network": ["*"],
     "project": "CONTRIBUTE"
