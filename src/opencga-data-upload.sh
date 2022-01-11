@@ -15,16 +15,18 @@ main() {
         opencga_cli_file_id=$(jq -r .opencga_cli_file_id "${1}")
     }
 
-    # Download inputs in the "in" folder
-    mkdir -p /home/dnanexus/in
+    # Make required folders
+    mkdir -p /home/dnanexus/in /home/dnanexus/packages 
+
+    # Unpack and install python dependencies
+    tar xf python_packages.tar.gz -C packages
+    python3 -m pip install --no-index --no-deps packages/*
 
     # Get the original name of the VCF file
     vcf_name=$(dx describe "${input_vcf}" --name)
 
     echo "Downloading input files"
-    dx download "${input_vcf}" -o /home/dnanexus/in/"${vcf_name}"
-    dx download "${input_metadata}" -o /home/dnanexus/in/metadata.json
-    dx download "${input_credentials}" -o /home/dnanexus/in/credentials.json
+    dx-download-all-inputs --parallel
 
     # Read credentials file
     read_cred /home/dnanexus/in/credentials.json
