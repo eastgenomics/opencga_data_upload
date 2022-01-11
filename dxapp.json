@@ -41,13 +41,13 @@
       "optional": false,
       "patterns": ["*.json"],
       "help": "JSON file containing the credentials and host for access to the OpenCGA instance",
-      "default": [
+      "default": 
         {
           "$dnanexus_link": {
             "project": "project-G7K3K3j4yB9P0kkjFXQ4yqjy",
             "id": "file-G6XPFF04XjQP8Z175fG1q8Y7"
           }
-        },
+        }
     }
   ],
   "outputSpec": [

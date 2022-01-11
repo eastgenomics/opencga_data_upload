@@ -15,7 +15,7 @@ main() {
     }
 
     # Make required folders
-    mkdir -p packages input
+    mkdir -p packages
 
     # Unpack and install python dependencies
     tar xf python_packages.tar.gz -C packages
@@ -29,7 +29,7 @@ main() {
     find ~/in -type f -name "*" -print0 | xargs -0 -I {} mv {} ~/
 
     # Read credentials file
-    read_cred /home/dnanexus/input/credentials.json
+    read_cred /home/dnanexus/credentials.json
 
     # Download openCGA CLI and uncompress
     echo "Getting the OpenCGA CLI"
@@ -48,7 +48,7 @@ main() {
 
     # Run opencga load
     echo "Launching OpenCGA upload"
-    opencga_cmd="python3 opencga_upload_and_index.py --metadata /home/dnanexus/metadata.json \dnanexus_fid
+    opencga_cmd="python3 opencga_upload_and_index.py --metadata /home/dnanexus/metadata.json \
                                                      --credentials /home/dnanexus/credentials.json \
                                                      --vcf /home/dnanexus/${input_vcf_name} \
                                                      --cli /home/dnanexus/opencga_cli/bin/opencga.sh \
