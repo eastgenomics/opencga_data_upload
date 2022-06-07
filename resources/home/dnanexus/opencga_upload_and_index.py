@@ -154,7 +154,7 @@ if __name__ == '__main__':
     svs_job = sample_variant_stats(oc=oc, study=manifest['study']['id'], sample_ids=sample_ids, logger=logger)
     # TODO: Check status of this job at the end
 
-    # SECONDARY INDEX
+    # SECONDARY ANNOTATION INDEX
     if secondary_indexed:
         logger.info("File {} is already indexed in Solr in the OpenCGA study {}.".format(os.path.basename(args.vcf),
                                                                                          manifest['study']['id']))

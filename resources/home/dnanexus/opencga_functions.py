@@ -10,7 +10,7 @@ import subprocess
 from subprocess import PIPE
 
 # Define status id
-status_id = "id"  # Used to be "name" in v2.1, but we are moving to using "id" since v2.2
+status_id = "name"  # Used to be "name" in v2.1, but we are moving to using "id" since v2.2
 
 
 def get_credentials(credentials_file):
