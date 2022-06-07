@@ -10,7 +10,7 @@ import subprocess
 from subprocess import PIPE
 
 # Define status id
-status_id = "id"  # Used to be "name" in v2.1, but we are moving to using "id" since v2.2
+status_id = "name"  # Used to be "name" in v2.1, but we are moving to using "id" since v2.2
 
 
 def get_credentials(credentials_file):
@@ -217,23 +217,25 @@ def index_file(oc, study, file, logger, somatic=False, multifile=False):
     :param study: study ID
     :param file: name of the VCF file already uploaded into OpenCGA
     :param logger: logger object to generate logs
+    :param somatic:
+    :param multifile:
     """
     data_obj = {'file': file}
     if somatic:
         data_obj['somatic'] = True
     if multifile:
-        data_obj['multifile'] = True
+        data_obj['loadMultiFileData'] = True
     index_job = oc.variants.run_index(study=study, data=data_obj)
     logger.info("Indexing file {} with job ID: {}".format(file, index_job.get_result(0)['id']))
     try:
         oc.wait_for_job(response=index_job.get_response(0))
         status = oc.jobs.info(study=study, jobs=index_job.get_result(0)['id'])
-        if status.get_result(0)['execution']['status']['name'] == 'DONE':
+        if status.get_result(0)['execution']['status'][status_id] == 'DONE':
             logger.info("OpenCGA job index file completed successfully")
         else:
             logger.info(
                 "OpenCGA job index file failed with status {}".format(
-                    status.get_result(0)['execution']['status']['name']))
+                    status.get_result(0)['execution']['status'][status_id]))
     except ValueError as ve:
         logger.exception("OpenCGA failed to index the file. {}".format(ve))
         sys.exit(1)
@@ -278,12 +280,12 @@ def annotate_variants(oc, study, logger, delay=True):
     try:
         oc.wait_for_job(response=annotate_job.get_response(0))
         status = oc.jobs.info(study=study, jobs=annotate_job.get_result(0)['id'])
-        if status.get_result(0)['execution']['status']['name'] == 'DONE':
+        if status.get_result(0)['execution']['status'][status_id] == 'DONE':
             logger.info("OpenCGA job annotate variants completed successfully")
         else:
             logger.info(
                 "OpenCGA job annotate variants failed with status {}".format(
-                    status.get_result(0)['execution']['status']['name']))
+                    status.get_result(0)['execution']['status'][status_id]))
     except ValueError as ve:
         logger.exception("OpenCGA annotation job failed. {}".format(ve))
         sys.exit(1)
@@ -330,40 +332,14 @@ def secondary_index(oc, study, logger, delay=True):
     try:
         oc.wait_for_job(response=secondary_index_job.get_response(0))
         status = oc.jobs.info(study=study, jobs=secondary_index_job.get_result(0)['id'])
-        if status.get_result(0)['execution']['status']['name'] == 'DONE':
+        if status.get_result(0)['execution']['status'][status_id] == 'DONE':
             logger.info("OpenCGA job secondary index completed successfully")
         else:
             logger.info(
                 "OpenCGA job secondary index failed with status {}".format(
-                    status.get_result(0)['execution']['status']['name']))
+                    status.get_result(0)['execution']['status'][status_id]))
     except ValueError as ve:
         logger.exception("OpenCGA secondary index job failed. {}".format(ve))
         sys.exit(1)
     return secondary_index_job
 
-
-def check_template(oc, study, logger, template):
-    """
-    Check that the template has the minimum required information. Assumes a zip file is provided.
-    :param oc: OpenCGA client
-    :param study: study ID
-    :param logger: logger object to generate logs
-    :param template: template in ZIP compressed format with the metadata to load
-    """
-    # check manifest
-    manifest, samples, individuals, clinical = read_metadata(metadata_file=template, logger=logger)
-
-
-    return "done"
-
-
-def load_template(oc, study, logger, template):
-    """
-    Index data in Solr to be displayed in the variant browser
-    :param oc: OpenCGA client
-    :param study: study ID
-    :param logger: logger object to generate logs
-    :param template: boolean specifying whether the annotation can be delayed
-    """
-
-    return "done"

@@ -14,14 +14,6 @@
       "help": ""
     },
     {
-      "name": "input_metadata",
-      "label": "Metadata file",
-      "class": "file",
-      "optional": false,
-      "patterns": ["*"],
-      "help": "JSON file containing information about the study and the samples"
-    },
-    {
       "name": "input_credentials",
       "label": "Credentials file",
       "class": "file",
