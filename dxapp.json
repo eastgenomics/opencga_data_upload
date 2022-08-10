@@ -8,7 +8,7 @@
     {
       "name": "input_vcf",
       "label": "VCF to be uploaded",
-      "class": "array:file",
+      "class": "file",
       "optional": false,
       "patterns": ["*.vcf", "*.vcf.gz"],
       "help": ""
@@ -19,7 +19,7 @@
       "class": "file",
       "optional": false,
       "patterns": ["*"],
-      "help": "JSON file containing information about the study and the samples"
+      "help": "JSON file containing information about the study and the metadata to be loaded"
     },
     {
       "name": "input_credentials",

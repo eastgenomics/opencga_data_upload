@@ -8,6 +8,7 @@ from pyopencga.opencga_client import OpencgaClient
 from pyopencga.opencga_config import ClientConfiguration
 import subprocess
 from subprocess import PIPE
+from time import time
 
 # Define status id
 status_id = "name"  # Used to be "name" in v2.1, but we are moving to using "id" since v2.2
@@ -56,7 +57,7 @@ def connect_pyopencga(credentials, logger):
     oc.login(user=credentials['user'],
              password=credentials['password'])
     if oc.token is not None:
-        logger.info("Successfully connected to pyopencga.\nToken ID: {}".format(oc.token))
+        logger.info("Successfully connected to pyopencga")
     else:
         logger.error("Failed to connect to pyopencga")
         sys.exit(1)
@@ -71,7 +72,7 @@ def connect_cli(credentials, opencga_cli, logger):
     :param logger: logger object to generate logs
     """
     # Launch login on the CLI
-    process = subprocess.run([opencga_cli, "users", "login", "-u", credentials['user']],
+    process = subprocess.run([opencga_cli, "users", "login", "-u", credentials['user'], "-p"],
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                              input=credentials['password'])
     logger.info(process.stdout)
@@ -87,7 +88,7 @@ def check_file_status(oc, study, file_name, attributes, logger, check_attributes
     if the file has been already indexed and annotated.
     :param oc: openCGA client
     :param study: study ID
-    :param file_name: name of the file that wants to be uploaded
+    :param file_name: name of the file to be uploaded
     :param attributes: attributes dictionary (keys and values) to be checked
     :return: returns three booleans indicating whether the file has been uploaded, indexed and annotated
     :param logger: logger object to generate logs
@@ -97,7 +98,7 @@ def check_file_status(oc, study, file_name, attributes, logger, check_attributes
     uploaded = None
     indexed = None
     annotated = None
-    secondary_indexed = None
+    sample_index = None
     sample_ids = None
     file_path = None
 
@@ -118,12 +119,12 @@ def check_file_status(oc, study, file_name, attributes, logger, check_attributes
         file_status = file_search.get_result(0)['internal']['status'][status_id]
         index_status = file_search.get_result(0)['internal']['variant']['index']['status'][status_id]
         annotation_status = file_search.get_result(0)['internal']['variant']['annotationIndex']['status'][status_id]
-        secondary_index_status = file_search.get_result(0)['internal']['variant']['secondaryIndex']['status'][status_id]
+        secondary_sample_index_status = file_search.get_result(0)['internal']['variant']['secondaryIndex']['status'][status_id]
 
         logger.info("File status: {}".format(file_status))
         logger.info("Index status: {}".format(index_status))
         logger.info("Annotation status: {}".format(annotation_status))
-        logger.info("Secondary index status: {}".format(secondary_index_status))
+        logger.info("Secondary sample index status: {}".format(secondary_sample_index_status))
 
         # Check upload status
         if file_status == "READY":
@@ -165,18 +166,18 @@ def check_file_status(oc, study, file_name, attributes, logger, check_attributes
             annotated = False
 
         # Check secondary index status
-        if secondary_index_status == "READY":
-            secondary_indexed = True
+        if secondary_sample_index_status == "READY":
+            sample_index = True
             # logger.info("File {} is correctly annotated in the OpenCGA study {}.".format(file_name, metadata['study']))
         else:
-            secondary_indexed = False
+            sample_index = False
 
     # There is more than one file with this name in this study!
     else:
         logger.error("More than one file in OpenCGA with this name {} in study {}".format(file_name, study))
         sys.exit(1)
 
-    return uploaded, indexed, annotated, secondary_indexed, file_path, sample_ids
+    return uploaded, indexed, annotated, sample_index, file_path, sample_ids
 
 
 def upload_file(opencga_cli, oc, study, file, logger, attributes=dict(), file_path="data/"):
@@ -193,14 +194,14 @@ def upload_file(opencga_cli, oc, study, file, logger, attributes=dict(), file_pa
     """
     # Run upload using the bash CLI
     process = subprocess.Popen([opencga_cli, "files", "upload", "--input", file, "--study", study,
-                                "--catalog-path", file_path, "--parents"], stdout=PIPE, stderr=PIPE, text=True)
+                                "--catalog-path", file_path, "--parents", "true"], stdout=PIPE, stderr=PIPE, text=True)
     process.wait()  # Wait until the execution is complete to continue with the program
     stdout, stderr = process.communicate()
     if stderr != "":
         logger.error(str(stderr))
         sys.exit(0)
     else:
-        logger.info("File uploaded successfully. Path to file in OpenCGA catalog: {}".format(stdout.split('\t')[18]))
+        #logger.info("File uploaded successfully. Path to file in OpenCGA catalog: {}".format(stdout.split('\t')[18]))
         logger.info("\n" + stdout)
 
     # Update file to contain the provided attributes
@@ -222,7 +223,7 @@ def index_file(oc, study, file, logger, somatic=False, multifile=False):
     if somatic:
         data_obj['somatic'] = True
     if multifile:
-        data_obj['multifile'] = True
+        data_obj['loadMultiFileData'] = True
     index_job = oc.variants.run_index(study=study, data=data_obj)
     logger.info("Indexing file {} with job ID: {}".format(file, index_job.get_result(0)['id']))
     try:
