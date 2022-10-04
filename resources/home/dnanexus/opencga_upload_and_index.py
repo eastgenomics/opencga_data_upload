@@ -40,31 +40,6 @@ logger.addHandler(console)
 no_delay_priority = ['URGENT']
 
 
-def build_variant_sample_index(oc, metadata, sample_ids):
-    """
-    Build and annotate the sample index for the selected list of samples
-    :param oc: OpenCGA client
-    :param metadata: metadata dictionary
-    :param sample_ids: list of sample IDs
-    """
-    variant_sample_index_job = oc.variant_operations.index_sample_genotype(study=metadata['study'], data={'sample': sample_ids})
-    logger.info("Building variant sample indices for sample(s) {} with job ID: {}".format(', '.join(sample_ids),
-                                                                        variant_sample_index_job.get_result(0)['id']))
-    try:
-        oc.wait_for_job(response=variant_sample_index_job.get_response(0))
-        status = oc.jobs.info(study=metadata['study'], jobs=variant_sample_index_job.get_result(0)['id'])
-        if status.get_result(0)['execution']['status']['name'] == 'DONE':
-            logger.info(
-                "OpenCGA job variant sample index completed successfully for sample(s).".format(', '.join(sample_ids)))
-        else:
-            logger.info(
-                "OpenCGA job variant sample index failed with status {}.".format(
-                    status.get_result(0)['execution']['status']['name']))
-    except ValueError as ve:
-        logger.exception("OpenCGA job variant sample index failed. {}".format(ve))
-        sys.exit(0)
-
-
 if __name__ == '__main__':
     # Set the arguments of the command line
     parser = argparse.ArgumentParser(description=' Index VCFs from DNANexus into OpenCGA')
@@ -121,15 +96,15 @@ if __name__ == '__main__':
             somatic = True
         else:
             file_data = {'software': {'name': 'Pindel'}}
-        # Extract germline and tumour sample names
-        with open(args.vcf, 'r') as cancer_vcf:
-            for line in cancer_vcf:
-                if line.startswith('##SAMPLE=<ID=NORMAL'):
-                    match_name = re.search(".+SampleName=(.+)>", line)
-                    normal = match_name.group(1)
-                if line.startswith('##SAMPLE=<ID=TUMOUR'):
-                    match_name = re.search(".+SampleName=(.+)>", line)
-                    tumor = match_name.group(1)
+        # # Extract germline and tumour sample names
+        # with open(args.vcf, 'r') as cancer_vcf:
+        #     for line in cancer_vcf:
+        #         if line.startswith('##SAMPLE=<ID=NORMAL'):
+        #             match_name = re.search(".+SampleName=(.+)>", line)
+        #             normal = match_name.group(1)
+        #         if line.startswith('##SAMPLE=<ID=TUMOUR'):
+        #             match_name = re.search(".+SampleName=(.+)>", line)
+        #             tumor = match_name.group(1)
 
     # Check the status of the file and execute the necessary actions
     uploaded, indexed, annotated, sample_index, existing_file_path, sample_ids = check_file_status(oc=oc,
@@ -144,8 +119,8 @@ if __name__ == '__main__':
                     "Path to file: {}".format(os.path.basename(args.vcf), manifest['study']['id'], existing_file_path))
     else:
         logger.info("Uploading file {} into study {}...".format(os.path.basename(args.vcf), manifest['study']['id']))
-        # upload_file(opencga_cli=opencga_cli, oc=oc, study=manifest['study']['id'], file=args.vcf, file_path=file_path,
-        #             attributes=dnanexus_attributes, logger=logger)
+        upload_file(opencga_cli=opencga_cli, oc=oc, study=manifest['study']['id'], file=args.vcf, file_path=file_path,
+                    attributes=dnanexus_attributes, logger=logger)
 
     # INDEXING
     if indexed:
@@ -157,96 +132,97 @@ if __name__ == '__main__':
                    somatic=somatic, multifile=multi_file)
 
     # Launch variant stats index
-    # logger.info("Launching variant stats...")
-    # vsi_job = variant_stats_index(oc=oc, study=manifest['study']['id'], cohort='ALL', logger=logger)
+    logger.info("Launching variant stats...")
+    vsi_job = variant_stats_index(oc=oc, study=manifest['study']['id'], cohort='ALL', logger=logger)
     # # TODO: Check status of this job at the end
 
     # ANNOTATION
-    # if annotated:
-    #     logger.info("File {} is already annotated in the OpenCGA study {}.".format(os.path.basename(args.vcf),
-    #                                                                                manifest['study']['id']))
-    # else:
-    #     logger.info("Annotating file {} into study {}...".format(os.path.basename(args.vcf), manifest['study']['id']))
-    #     annotate_variants(oc=oc, study=manifest['study']['id'], logger=logger, delay=delay)
+    if annotated:
+        logger.info("File {} is already annotated in the OpenCGA study {}.".format(os.path.basename(args.vcf),
+                                                                                   manifest['study']['id']))
+    else:
+        logger.info("Annotating file {} into study {}...".format(os.path.basename(args.vcf), manifest['study']['id']))
+        annotate_variants(oc=oc, study=manifest['study']['id'], logger=logger, delay=delay)
 
     # Run sample variant stats
-    # logger.info("Launching variant stats...")
-    # svs_job = sample_variant_stats(oc=oc, study=manifest['study']['id'], sample_ids=sample_ids, logger=logger)
+    logger.info("Launching variant stats...")
+    svs_job = sample_variant_stats(oc=oc, study=manifest['study']['id'], sample_ids=sample_ids, logger=logger)
     # # TODO: Check status of this job at the end
 
     # SECONDARY ANNOTATION INDEX
-    # if secondary_indexed:
-    #     logger.info("File {} is already indexed in Solr in the OpenCGA study {}.".format(os.path.basename(args.vcf),
-    #                                                                                      manifest['study']['id']))
-    # else:
-    #     logger.info("Updating Solr index in study {}...".format(manifest['study']['id']))
-    #     secondary_index(oc=oc, study=manifest['study']['id'], logger=logger)
+    if secondary_indexed:
+        logger.info("File {} is already indexed in Solr in the OpenCGA study {}.".format(os.path.basename(args.vcf),
+                                                                                         manifest['study']['id']))
+    else:
+        logger.info("Updating Solr index in study {}...".format(manifest['study']['id']))
+        secondary_index(oc=oc, study=manifest['study']['id'], logger=logger)
 
     # LOAD TEMPLATE
-    #load_template()
+    load_template(c=oc, study=manifest['study']['id'], logger=logger)
 
-    # CREATE IND
-    # Get sample ID
-    sampleIds = oc.files.info(study=manifest['study']['id'], files=os.path.basename(args.vcf), include="sampleIds").get_result(0)['sampleIds']
-    if len(sampleIds) < 1:
-        logger.error("Unexpected number of samples in the VCF")
-        sys.exit(1)
-    else:
-        for sampleID in sampleIds:
-            # Update sample information
-            if sampleID == normal:
-                somatic = False
-            elif sampleID == tumor:
-                somatic = True
-            oc.samples.update(study=manifest['study']['id'], samples=sampleID, data={'somatic': somatic})
-
-        # Define individual
-        individual_id = samples[0]['id']
-        ind_data = {
-            'id': individual_id,
-            'name': individual_id,
-            'disorders': [{
-                'id': 'HaemOnc'
-            }],
-            'sex': individuals['sex']
-        }
-        # Check if individual exists
-        logger.info("Checking if individual exists...")
-        check_individual = oc.individuals.search(study=manifest['study']['id'], id=individual_id).get_num_results()
-        if check_individual == 0:
-            logger.info("Creating new individual {}...".format(individual_id))
-            oc.individuals.create(study=manifest['study']['id'], samples='{}'.format(tumor), data=ind_data)
-        elif check_individual > 0:
-            logger.info("Individual {} already exists in the database. No action needed.".format(individual_id))
-            # oc.individuals.update(study=manifest['study']['id'], individuals=individual_id, data=ind_data,
-            #                       samples='{}'.format(",".join(sampleIds)), samples_action='ADD')
-
-    # CREATE CASE
-    logger.info("Checking if clinical case exists...")
-    clinical_case = {
-        'id': clinical[0]['id'],
-        'type': clinical[0]['type'],
-        'proband': {
-            'id': samples[0]['id'],
-            'samples': [{
-                'id': samples[0]['individualId'],
-            }]
-        },
-        'disorder': clinical[0]['disorder'],
-        'panels': [{'id': 'myeloid_genes'}],
-        'priority': clinical[0]['priority'],
-        'comments': [{
-            'message': 'Case created automatically',
-            'tags': ['auto', 'validation']
-        }],
-        'status': {'id': 'READY_FOR_INTERPRETATION'}
-    }
-    check_case = oc.clinical.search(study=manifest['study']['id'], id=clinical_case["id"]).get_num_results()
-    if check_case == 0:
-        logger.info("Creating new clinical case {}...".format(clinical_case["id"]))
-        oc.clinical.create(data=clinical_case, study=manifest['study']['id'], createDefaultInterpretation=True)
-    elif check_case == 1:
-        logger.info("Case {} already exists in the database.".format(clinical_case["id"]))
+### OLD ####
+    # # CREATE IND
+    # # Get sample ID
+    # sampleIds = oc.files.info(study=manifest['study']['id'], files=os.path.basename(args.vcf), include="sampleIds").get_result(0)['sampleIds']
+    # if len(sampleIds) < 1:
+    #     logger.error("Unexpected number of samples in the VCF")
+    #     sys.exit(1)
+    # else:
+    #     for sampleID in sampleIds:
+    #         # Update sample information
+    #         if sampleID == normal:
+    #             somatic = False
+    #         elif sampleID == tumor:
+    #             somatic = True
+    #         oc.samples.update(study=manifest['study']['id'], samples=sampleID, data={'somatic': somatic})
+    #
+    #     # Define individual
+    #     individual_id = samples[0]['id']
+    #     ind_data = {
+    #         'id': individual_id,
+    #         'name': individual_id,
+    #         'disorders': [{
+    #             'id': 'HaemOnc'
+    #         }],
+    #         'sex': individuals['sex']
+    #     }
+    #     # Check if individual exists
+    #     logger.info("Checking if individual exists...")
+    #     check_individual = oc.individuals.search(study=manifest['study']['id'], id=individual_id).get_num_results()
+    #     if check_individual == 0:
+    #         logger.info("Creating new individual {}...".format(individual_id))
+    #         oc.individuals.create(study=manifest['study']['id'], samples='{}'.format(tumor), data=ind_data)
+    #     elif check_individual > 0:
+    #         logger.info("Individual {} already exists in the database. No action needed.".format(individual_id))
+    #         # oc.individuals.update(study=manifest['study']['id'], individuals=individual_id, data=ind_data,
+    #         #                       samples='{}'.format(",".join(sampleIds)), samples_action='ADD')
+    #
+    # # CREATE CASE
+    # logger.info("Checking if clinical case exists...")
+    # clinical_case = {
+    #     'id': clinical[0]['id'],
+    #     'type': clinical[0]['type'],
+    #     'proband': {
+    #         'id': samples[0]['id'],
+    #         'samples': [{
+    #             'id': samples[0]['individualId'],
+    #         }]
+    #     },
+    #     'disorder': clinical[0]['disorder'],
+    #     'panels': [{'id': 'myeloid_genes'}],
+    #     'priority': clinical[0]['priority'],
+    #     'comments': [{
+    #         'message': 'Case created automatically',
+    #         'tags': ['auto', 'validation']
+    #     }],
+    #     'status': {'id': 'READY_FOR_INTERPRETATION'}
+    # }
+    # check_case = oc.clinical.search(study=manifest['study']['id'], id=clinical_case["id"]).get_num_results()
+    # if check_case == 0:
+    #     logger.info("Creating new clinical case {}...".format(clinical_case["id"]))
+    #     oc.clinical.create(data=clinical_case, study=manifest['study']['id'], createDefaultInterpretation=True)
+    # elif check_case == 1:
+    #     logger.info("Case {} already exists in the database.".format(clinical_case["id"]))
 
     # Run variant sample index
     #build_variant_sample_index(oc=oc, metadata=metadata, sample_ids=sample_ids)

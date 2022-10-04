@@ -19,7 +19,7 @@
       "class": "file",
       "optional": false,
       "patterns": ["*"],
-      "help": "JSON file containing information about the study and the metadata to be loaded"
+      "help": "Zip file containing multiple YAML files with information about the study and the clinical metadata to be loaded",
     },
     {
       "name": "input_credentials",

@@ -353,8 +353,6 @@ def check_template(oc, study, logger, template):
     """
     # check manifest
     manifest, samples, individuals, clinical = read_metadata(metadata_file=template, logger=logger)
-
-
     return "done"
 
 
@@ -366,5 +364,32 @@ def load_template(oc, study, logger, template):
     :param logger: logger object to generate logs
     :param template: boolean specifying whether the annotation can be delayed
     """
-
+    oc.studies.template(study=study, files=templates)
+    oc.studies.template(study=study, id={}, overwrite=True, resume=True)
     return "done"
+
+
+# TO REMOVE:
+# def build_variant_sample_index(oc, metadata, sample_ids):
+#     """
+#     Build and annotate the sample index for the selected list of samples
+#     :param oc: OpenCGA client
+#     :param metadata: metadata dictionary
+#     :param sample_ids: list of sample IDs
+#     """
+#     variant_sample_index_job = oc.variant_operations.index_sample_genotype(study=metadata['study'], data={'sample': sample_ids})
+#     logger.info("Building variant sample indices for sample(s) {} with job ID: {}".format(', '.join(sample_ids),
+#                                                                         variant_sample_index_job.get_result(0)['id']))
+#     try:
+#         oc.wait_for_job(response=variant_sample_index_job.get_response(0))
+#         status = oc.jobs.info(study=metadata['study'], jobs=variant_sample_index_job.get_result(0)['id'])
+#         if status.get_result(0)['execution']['status']['name'] == 'DONE':
+#             logger.info(
+#                 "OpenCGA job variant sample index completed successfully for sample(s).".format(', '.join(sample_ids)))
+#         else:
+#             logger.info(
+#                 "OpenCGA job variant sample index failed with status {}.".format(
+#                     status.get_result(0)['execution']['status']['name']))
+#     except ValueError as ve:
+#         logger.exception("OpenCGA job variant sample index failed. {}".format(ve))
+#         sys.exit(0)
