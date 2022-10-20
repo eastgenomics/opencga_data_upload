@@ -44,6 +44,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Load VCFs from DNANexus into OpenCGA')
     parser.add_argument('--credentials', help='JSON file with credentials and host to access OpenCGA')
     parser.add_argument('--cli', help='Path to OpenCGA cli')
+    parser.add_argument('--cli21', help='Path to OpenCGA cli 2.1')
     parser.add_argument('--vcf', help='Input vcf file')
     parser.add_argument('--dnanexus_fid', help='DNA nexus file ID')
     args = parser.parse_args()
@@ -54,18 +55,25 @@ if __name__ == '__main__':
         sys.exit(0)
     opencga_cli = args.cli
 
+    if not os.path.isfile(args.cli21):
+        logger.error("OpenCGA CLI 2.1 not found.")
+        sys.exit(0)
+    opencga_cli21 = args.cli21
+
     # Read credentials file
     credentials = get_credentials(credentials_file=args.credentials)
 
     # Login OpenCGA CLI
+    logger.info(credentials)
     connect_cli(credentials=credentials, opencga_cli=opencga_cli, logger=logger)
+    connect_cli(credentials=credentials, opencga_cli=opencga_cli21, logger=logger)
 
     # Create pyopencga client
     oc = connect_pyopencga(credentials=credentials, logger=logger)
 
     # Get today's date to store the file in a directory named as "YearMonth" (e.g. 202112 = December 2021)
-    #date_folder = datetime.date.today().strftime("%Y%m")
-    date_folder = "202205"
+    date_folder = datetime.date.today().strftime("%Y%m")
+    #date_folder = "202205"
     file_path = "data/" + date_folder
 
     # Format DNA Nexus file ID to attributes
@@ -75,7 +83,7 @@ if __name__ == '__main__':
     # Define index type
     somatic = True
     multi_file = True
-    study_id = 'tso500'
+    study_id = 'solid_cancer:tso500'
 
     # Check variant type
     structural = False
@@ -87,13 +95,13 @@ if __name__ == '__main__':
 
     # UPLOAD
     logger.info("Uploading file {} into study {}...".format(os.path.basename(args.vcf), study_id))
-    upload_file(opencga_cli=opencga_cli, oc=oc, study=study_id, file=args.vcf, file_path=file_path,
-                attributes=dnanexus_attributes, logger=logger)
+    # upload_file(opencga_cli=opencga_cli21, oc=oc, study=study_id, file=args.vcf, file_path=file_path,
+    #             attributes=dnanexus_attributes, logger=logger)
 
     # INDEXING
     logger.info("Indexing file {} into study {}...".format(os.path.basename(args.vcf), study_id))
-    index_file(oc=oc, study=study_id, file=os.path.basename(args.vcf), logger=logger,
-               somatic=somatic, multifile=multi_file)
+    # index_file(oc=oc, study=study_id, file=os.path.basename(args.vcf), logger=logger,
+    #            somatic=somatic, multifile=multi_file)
 
     # UPDATE FILE
     logger.info("Updating file information...")
@@ -148,7 +156,6 @@ if __name__ == '__main__':
         'proband': {
             'id': sampleID,
         },
-        'analyst': {'id': 'emee-glh'},
         'comments': [{
             'message': 'Case created automatically',
             'tags': ['auto']

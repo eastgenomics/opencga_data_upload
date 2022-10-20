@@ -71,13 +71,15 @@ def connect_cli(credentials, opencga_cli, logger):
     :param logger: logger object to generate logs
     """
     # Launch login on the CLI
-    process = subprocess.run([opencga_cli, "users", "login", "-u", credentials['user']],
+    process = subprocess.run([opencga_cli, "users", "login", "-u", credentials['user'], "-p"],
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                              input=credentials['password'])
+    logger.info(process.args)
     logger.info(process.stdout)
     # Check that the login worked
-    if process.stderr != "":
+    if "ERROR" in process.stderr:
         logger.error("Failed to connect to OpenCGA CLI")
+        logger.error(process.stderr)
         sys.exit(1)
 
 
@@ -196,9 +198,12 @@ def upload_file(opencga_cli, oc, study, file, logger, attributes=dict(), file_pa
                                 "--catalog-path", file_path, "--parents"], stdout=PIPE, stderr=PIPE, text=True)
     process.wait()  # Wait until the execution is complete to continue with the program
     stdout, stderr = process.communicate()
-    if stderr != "":
+    # if stderr != "":
+    #     logger.error(str(stderr))
+    #     sys.exit(0)
+    if "ERROR" in stderr:
         logger.error(str(stderr))
-        sys.exit(0)
+        sys.exit(1)
     else:
         logger.info("File uploaded successfully. Path to file in OpenCGA catalog: {}".format(stdout.split('\t')[18]))
         logger.info("\n" + stdout)
