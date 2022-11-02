@@ -1,1 +1,1 @@
-pyopencga==2.4.2
+pyopencga==2.4.7
