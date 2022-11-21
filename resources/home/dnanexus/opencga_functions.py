@@ -33,6 +33,7 @@ def read_metadata(metadata_file, logger):
     :param logger: logger object to generate logs
     :return: dictionary with metadata params
     """
+    manifest = samples = individuals = clinical = None
     with zipfile.ZipFile(metadata_file, "r") as meta_zip:
         try:
             manifest = yaml.safe_load(meta_zip.open('manifest.yaml'))
@@ -83,14 +84,14 @@ def connect_cli(credentials, opencga_cli, logger):
         sys.exit(1)
 
 
-def check_file_status(oc, study, file_name, attributes, logger, check_attributes=False):
+def check_file_status(oc, study, file_name, file_info, logger, check_attributes=False):
     """
     Perform file checks. First if file has already been uploaded (file name exists in files.search) and if so, check
     if the file has been already indexed and annotated.
     :param oc: openCGA client
     :param study: study ID
     :param file_name: name of the file to be uploaded
-    :param attributes: attributes dictionary (keys and values) to be checked
+    :param file_info: attributes dictionary (keys and values) to be checked
     :return: returns three booleans indicating whether the file has been uploaded, indexed and annotated
     :param logger: logger object to generate logs
     """
@@ -136,13 +137,13 @@ def check_file_status(oc, study, file_name, attributes, logger, check_attributes
             #             "Path to file: {}".format(file_name, metadata['study'], file_search.get_result(0)['path']))
             # Check attributes
             if check_attributes:
-                for attr in attributes["attributes"]:
+                for attr in file_info["attributes"]:
                     if attr in file_search.get_result(0)['attributes']:
-                        if file_search.get_result(0)['attributes'][attr] == attributes["attributes"][attr]:
-                            logger.info("Attribute {} matches the one in OpenCGA: {}".format(attr, attributes["attributes"][attr]))
+                        if file_search.get_result(0)['attributes'][attr] == file_info["attributes"][attr]:
+                            logger.info("Attribute {} matches the one in OpenCGA: {}".format(attr, file_info["attributes"][attr]))
                         else:
                             logger.warning("Attribute {} does not match the one stored in OpenCGA:\n- Provided: {}\n"
-                                           "- Stored: {}".format(attr, attributes["attributes"][attr],
+                                           "- Stored: {}".format(attr, file_info["attributes"][attr],
                                                                  file_search.get_result(0)['attributes'][attr]))
                     else:
                         logger.warning("Attribute {} is not included in openCGA".format(attr))
@@ -181,7 +182,7 @@ def check_file_status(oc, study, file_name, attributes, logger, check_attributes
     return uploaded, indexed, annotated, sample_index, file_path, sample_ids
 
 
-def upload_file(opencga_cli, oc, study, file, logger, attributes=dict(), file_path="data/"):
+def upload_file(opencga_cli, oc, study, file, logger, file_info=dict(), file_path="data/"):
     """
     Uploads a file to the OpenCGA instance and stores it in the file path. It also updates the file to add the
     DNA nexus file ID as attribute
@@ -189,7 +190,7 @@ def upload_file(opencga_cli, oc, study, file, logger, attributes=dict(), file_pa
     :param oc: OpenCGA client
     :param study: study ID
     :param file: VCF file to upload
-    :param attributes: attributes to be added to the file
+    :param file_info: attributes to be added to the file
     :param file_path: directory inside OpenCGA where the file should be stored (default: data/)
     :param logger: logger object to generate logs
     """
@@ -208,7 +209,7 @@ def upload_file(opencga_cli, oc, study, file, logger, attributes=dict(), file_pa
 
     # Update file to contain the provided attributes
     try:
-        oc.files.update(study=study, files=os.path.basename(file), data=attributes)
+        oc.files.update(study=study, files=os.path.basename(file), data=file_info)
     except Exception as e:
         logger.error("Failed to add the attributes to the file in OpenCGA")
 

@@ -43,34 +43,67 @@ no_delay_priority = ['URGENT']
 if __name__ == '__main__':
     # Set the arguments of the command line
     parser = argparse.ArgumentParser(description=' Load VCFs from DNANexus into OpenCGA')
+    parser.add_argument('--project', help='OpenCGA Project where the file will be loaded')
+    parser.add_argument('--study', help='OpenCGA Study where the file will be loaded')
     parser.add_argument('--metadata', help='Zip file containing the metadata (minimum required information: "study")')
     parser.add_argument('--credentials', help='JSON file with credentials and host to access OpenCGA')
     parser.add_argument('--cli', help='Path to OpenCGA cli')
     parser.add_argument('--cli21', help='Path to OpenCGA cli 2.1')
     parser.add_argument('--vcf', help='Input vcf file')
+    parser.add_argument('--somatic', help='Use the somatic flag if the sample to be loaded is somatic',
+                        action='store_true')
+    parser.add_argument('--multifile', help='Use the multifile flag if you expect to load multiple files from this '
+                                            'sample', action='store_true')
     parser.add_argument('--dnanexus_fid', help='DNA nexus file ID')
     args = parser.parse_args()
 
     # Check the location of the OpenCGA CLI
     if not os.path.isfile(args.cli):
         logger.error("OpenCGA CLI not found.")
-        sys.exit(0)
+        sys.exit(1)
     opencga_cli = args.cli
 
     if not os.path.isfile(args.cli21):
         logger.error("OpenCGA CLI 2.1 not found.")
-        sys.exit(0)
+        sys.exit(1)
     opencga_cli21 = args.cli21
 
+    # Check if metadata has been provided
+    metadata = None
+    project = args.project
+    study = args.study
+    if args.metadata is not None and os.path.isfile(args.metadata):
+        metadata = True
+        logger.info("Metadata file provided: {}".format(args.metadata))
+    else:
+        metadata = False
+        logger.info("No metadata has been provided, VCF will not be associated to any individuals or cases")
+        if args.project is not None and args.study is not None:
+            logger.info("Data will be loaded in study: {}:{}".format(project, study))
+        else:
+            logger.error("No project or study provided. Please provide a metadata file or specify the project and "
+                         "study where data needs to be loaded.")
+            sys.exit(1)
+
     # Read metadata file
-    manifest, samples, individuals, clinical = read_metadata(metadata_file=args.metadata, logger=logger)
-    '''
-    Overwrite project and study to point to the test project
-    TO BE CHANGED
-    '''
-    manifest['configuration']['projectId'] = 'dnanexus'
-    manifest['study']['id'] = 'app_test'
-    study_fqn = manifest['configuration']['projectId'] + ":" + manifest['study']['id']
+    if metadata:
+        manifest, samples, individuals, clinical = read_metadata(metadata_file=args.metadata, logger=logger)
+        '''
+        Overwrite project and study to point to the test project
+        TO BE CHANGED
+        '''
+        # manifest['configuration']['projectId'] = 'dnanexus'
+        # manifest['study']['id'] = 'app_test'
+        project = manifest['configuration']['projectId']
+        study = manifest['study']['id']
+
+    # Define study FQN
+    if project is not None and study is not None:
+        study_fqn = project + ":" + study
+    else:
+        logger.error("No project or study provided. Please provide a metadata file or specify the project and "
+                     "study where data needs to be loaded.")
+        sys.exit(1)
 
     # Read credentials file
     credentials = get_credentials(credentials_file=args.credentials)
@@ -86,44 +119,41 @@ if __name__ == '__main__':
     date_folder = datetime.date.today().strftime("%Y%m")
     file_path = "data/" + date_folder
 
-    # Format DNA Nexus file ID to attributes
-    dnanexus_attributes = {"attributes": {
-                                "DNAnexusFileId": args.dnanexus_fid}}
-
     # Get case priority. If case priority is URGENT, jobs will not be delayed
     delay = True
-    priority = clinical[0]['priority']['id']
-    if priority in no_delay_priority:
-        delay = False
+    if metadata:
+        priority = clinical[0]['priority']['id']
+        if priority in no_delay_priority:
+            delay = False
 
     # Check study to define index type
-    somatic = False
-    multi_file = False
-    if clinical[0]['type'] == 'CANCER':
+    somatic = args.somatic
+    multi_file = args.multifile
+    if metadata and clinical[0]['type'] == 'CANCER':
         multi_file = True
-        normal = None
-        tumor = None
-        # define software
-        if 'tnhaplotyper2' in os.path.basename(args.vcf):
-            file_data = {'software': {'name': 'TNhaplotyper2'}}
-            somatic = True
-        else:
-            file_data = {'software': {'name': 'Pindel'}}
-        # # Extract germline and tumour sample names
-        # with open(args.vcf, 'r') as cancer_vcf:
-        #     for line in cancer_vcf:
-        #         if line.startswith('##SAMPLE=<ID=NORMAL'):
-        #             match_name = re.search(".+SampleName=(.+)>", line)
-        #             normal = match_name.group(1)
-        #         if line.startswith('##SAMPLE=<ID=TUMOUR'):
-        #             match_name = re.search(".+SampleName=(.+)>", line)
-        #             tumor = match_name.group(1)
+
+    # Format DNA Nexus file ID to attributes
+    file_data = {}
+    if args.dnanexus_fid:
+        file_data["attributes"] = {
+            "DNAnexusFileId": args.dnanexus_fid
+        }
+
+    # define software
+    if 'tnhaplotyper2' in os.path.basename(args.vcf):
+        file_data['software'] = {'name': 'TNhaplotyper2'}
+    if '.SV.' in os.path.basename(args.vcf):
+        file_data['software'] = {'name': 'Manta'}
+    if os.path.basename(args.vcf).startswith('EH_'):
+        file_data['software'] = {'name': 'ExpansionHunter'}
+    # else:
+    #     file_data['software'] = {'name': 'Pindel'}
 
     # Check the status of the file and execute the necessary actions
     uploaded, indexed, annotated, sample_index, existing_file_path, sample_ids = check_file_status(oc=oc,
                                                                                           study=study_fqn,
                                                                                           file_name=os.path.basename(args.vcf),
-                                                                                          attributes=dnanexus_attributes,
+                                                                                          file_info=file_data,
                                                                                           logger=logger, check_attributes=True)
 
     # UPLOAD
@@ -133,7 +163,7 @@ if __name__ == '__main__':
     else:
         logger.info("Uploading file {} into study {}...".format(os.path.basename(args.vcf), study_fqn))
         upload_file(opencga_cli=opencga_cli21, oc=oc, study=study_fqn, file=args.vcf, file_path=file_path,
-                    attributes=dnanexus_attributes, logger=logger)
+                    file_info=file_data, logger=logger)
 
     # INDEXING
     if indexed:
@@ -145,7 +175,7 @@ if __name__ == '__main__':
 
     # Launch variant stats index
     logger.info("Launching variant stats...")
-    vsi_job = variant_stats_index(oc=oc, study=study_fqn, cohort='ALL', logger=logger)
+#    vsi_job = variant_stats_index(oc=oc, study=study_fqn, cohort='ALL', logger=logger)
     # # TODO: Check status of this job at the end
 
     # ANNOTATION
@@ -154,8 +184,7 @@ if __name__ == '__main__':
                                                                                    study_fqn))
     else:
         logger.info("Annotating file {} into study {}...".format(os.path.basename(args.vcf), study_fqn))
-        annotate_variants(oc=oc, project=manifest['configuration']['projectId'], study=manifest['study']['id'],
-                          logger=logger, delay=delay)
+#        annotate_variants(oc=oc, project=project, study=study, logger=logger, delay=delay)
 
     # Launch sample stats index
     logger.info("Launching sample stats...")
@@ -166,27 +195,25 @@ if __name__ == '__main__':
     secondary_annotation_index(oc=oc, study=study_fqn, logger=logger, delay=delay)
 
     # SECONDARY SAMPLE INDEX
-    secondary_sample_index(oc=oc, study=study_fqn, sample=sample_ids, logger=logger, delay=delay)
+    secondary_sample_index(oc=oc, study=study_fqn, sample=sample_ids, logger=logger)
 
-    # LOAD TEMPLATE
-    # load_template(oc=oc, study=manifest['study']['id'], template=args.metadata,
-    #               logger=logger)
-
-
-    # CREATE IND
-    # Get sample ID
-    sampleIds = oc.files.info(study=study_fqn, files=os.path.basename(args.vcf), include="sampleIds").get_result(0)['sampleIds']
-    if len(sampleIds) < 1:
-        logger.error("Unexpected number of samples in the VCF")
-        sys.exit(1)
+    # METADATA
+    if metadata:
+        logger.info("Loading metadata...")
+        # LOAD TEMPLATE
+        # load_template(oc=oc, study=manifest['study']['id'], template=args.metadata,
+        #               logger=logger)
     else:
-        for sampleID in sampleIds:
-            # Update sample information
-            if sampleID == normal:
-                somatic = False
-            elif sampleID == tumor:
-                somatic = True
-            oc.samples.update(study=study_fqn, samples=sampleID, data={'somatic': somatic})
+        logger.info("No metadata provided. An individual and a case will be created using the sample name")
+        # CREATE IND
+        # Get sample ID
+        sampleIds = oc.files.info(study=study_fqn, files=os.path.basename(args.vcf), include="sampleIds").get_result(0)['sampleIds']
+        if len(sampleIds) < 1:
+            logger.error("Unexpected number of samples in the VCF")
+            sys.exit(1)
+        else:
+            for sampleID in sampleIds:
+                oc.samples.update(study=study_fqn, samples=sampleID)
 
         # Define individual
         individual_id = individuals['id']
@@ -203,7 +230,7 @@ if __name__ == '__main__':
         check_individual = oc.individuals.search(study=study_fqn, id=individual_id).get_num_results()
         if check_individual == 0:
             logger.info("Creating new individual {}...".format(individual_id))
-            #oc.individuals.create(study=study_fqn, samples='{}'.format(",".join(sampleIds)), data=ind_data)
+            oc.individuals.create(study=study_fqn, samples='{}'.format(",".join(sampleIds)), data=ind_data)
         elif check_individual > 0:
             logger.info("Individual {} already exists in the database. No action needed.".format(individual_id))
             oc.individuals.update(study=manifest['study']['id'], individuals=individual_id, data=ind_data,
@@ -240,7 +267,7 @@ if __name__ == '__main__':
     uploaded, indexed, annotated, sample_index, existing_file_path, sample_ids = check_file_status(oc=oc,
                                                                                           study=study_fqn,
                                                                                           file_name=os.path.basename(args.vcf),
-                                                                                          attributes=dnanexus_attributes,
+                                                                                          attributes=file_data,
                                                                                           logger=logger, check_attributes=True)
 
     # close loggers

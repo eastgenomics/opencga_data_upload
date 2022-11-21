@@ -17,7 +17,7 @@
       "name": "input_metadata",
       "label": "Metadata file",
       "class": "file",
-      "optional": false,
+      "optional": true,
       "patterns": ["*"],
       "help": "Zip file containing multiple YAML files with information about the study and the clinical metadata to be loaded"
     },
@@ -28,6 +28,34 @@
       "optional": false,
       "patterns": ["*"],
       "help": "JSON file containing the credentials and host for access to the OpenCGA instance"
+    },
+    {
+      "name": "input_project",
+      "label": "OpenCGA project",
+      "help": "Project where the file will be loaded",
+      "class": "string",
+      "optional": true
+    },
+    {
+      "name": "input_study",
+      "label": "OpenCGA study",
+      "help": "Study where the file will be loaded",
+      "class": "string",
+      "optional": true
+    },
+    {
+      "name": "input_somatic",
+      "label": "Somatic",
+      "help": "Indicate whether the sample is somatic",
+      "class": "boolean",
+      "optional": true
+    },
+    {
+      "name": "input_multifile",
+      "label": "Multifile",
+      "help": "Indicate whether you expect more files to be associated with this sample",
+      "class": "boolean",
+      "optional": true
     }
   ],
   "outputSpec": [

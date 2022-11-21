@@ -21,6 +21,10 @@ main() {
     echo "- Input VCF(s): ${input_vcf}"
     echo "- Metadata: '${input_metadata}'"
     echo "- Credentials file: '${input_credentials}'"
+    echo "- Project: '${input_project}'"
+    echo "- Study: '${input_study}'"
+    echo "- Somatic: '${input_somatic}'"
+    echo "- Multifile: '${input_mutifile}'"
 
     # The following line(s) use the dx command-line tool to download your file
     # inputs to the local file system using variable names for the filenames. To
@@ -41,11 +45,19 @@ main() {
 
     # Get the original name of the VCF file
     vcf_name=$(dx describe "${input_vcf}" --name)
+    echo "${vcf_name}"
 
     echo "Downloading input files"
     dx download "${input_vcf}" -o /home/dnanexus/in/"${vcf_name}"
-    dx download "${input_metadata}" -o /home/dnanexus/in/metadata.json
+    echo "VCF downloaded"
+    # dx download "${input_metadata}" -o /home/dnanexus/in/metadata.json
     dx download "${input_credentials}" -o /home/dnanexus/in/credentials.json
+    echo "Credentials downloaded"
+    if [ "${input_metadata}" ]; then
+      echo "Downloading ${input_metadata}..."
+      dx download "${input_metadata}" -o /home/dnanexus/in/metadata.json
+      echo "Metadata downloaded"
+    fi
 
     # Read credentials file
     read_cred /home/dnanexus/in/credentials.json
@@ -84,14 +96,29 @@ main() {
 
     # Run opencga load
     echo "Launching OpenCGA upload"
-    opencga_cmd="python3 opencga_upload_and_index.py --metadata /home/dnanexus/in/metadata.json \
-                                                     --credentials /home/dnanexus/in/credentials.json \
+    opencga_cmd="python3 opencga_upload_and_index.py --credentials /home/dnanexus/in/credentials.json \
                                                      --vcf /home/dnanexus/in/${vcf_name} \
                                                      --cli /home/dnanexus/opencga_cli/bin/opencga.sh \
                                                      --cli21 /home/dnanexus/opencga_cli2.1/bin/opencga.sh \
                                                      --dnanexus_fid ${dnanexus_fid}"
+    if [ -n "${input_metadata}" ]; then
+      opencga_cmd+=" --metadata /home/dnanexus/in/metadata.json"
+      dx download "${input_metadata}" -o /home/dnanexus/in/metadata.json
+    fi
+    if [ -n "${input_project}" ]; then
+      opencga_cmd+=" --project ${input_project}"
+    fi
+    if [ -n "${input_study}" ]; then
+      opencga_cmd+=" --study ${input_study}"
+    fi
+    if [ "${input_somatic}" = true ]; then
+      opencga_cmd+=" --somatic"
+    fi
+    if [ "${input_multifile}" = true ]; then
+      opencga_cmd+=" --multifile"
+    fi
     echo "${opencga_cmd}"
-    eval "${opencga_cmd}"
+    #eval "${opencga_cmd}"
 
     # To report any recognized errors in the correct format in
     # $HOME/job_error.json and exit this script, you can use the
@@ -106,8 +133,6 @@ main() {
             echo "VCF ${vcf_name} was loaded successfully to OpenCGA"
         fi
     fi
-
-    ls
 
     # Note however that this entire bash script is executed with -e
     # when running in the cloud, so any line which returns a nonzero
