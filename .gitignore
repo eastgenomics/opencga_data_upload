@@ -6,3 +6,5 @@ venv/
 test/
 requirements_old.txt
 inputs/
+*batch*
+resources/home/dnanexus/__pycache__/
