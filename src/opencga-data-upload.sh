@@ -50,12 +50,11 @@ main() {
     echo "Downloading input files"
     dx download "${input_vcf}" -o /home/dnanexus/in/"${vcf_name}"
     echo "VCF downloaded"
-    # dx download "${input_metadata}" -o /home/dnanexus/in/metadata.json
     dx download "${input_credentials}" -o /home/dnanexus/in/credentials.json
     echo "Credentials downloaded"
     if [ "${input_metadata}" ]; then
       echo "Downloading ${input_metadata}..."
-      dx download "${input_metadata}" -o /home/dnanexus/in/metadata.json
+      dx download "${input_metadata}" -o /home/dnanexus/in/metadata.zip
       echo "Metadata downloaded"
     fi
 
@@ -73,18 +72,6 @@ main() {
     else
       echo "${opencga_cli} in ${cli_name} is ready to use"
     fi
-    # ===
-    # CLI 2.1
-    cli21="project-G5XXyY84XjQPZKJfKX0ZQZpz:file-GJ6x0v04XjQ8x6236VG3fj5J"
-    dx download ${cli21}
-    cli_name21=$(dx describe "${cli21}" --name)
-    mkdir -p /home/dnanexus/opencga_cli2.1 && tar -xzf ${cli_name21} -C /home/dnanexus/opencga_cli2.1 --strip-components 1
-    opencga_cli21=$(ls /home/dnanexus/opencga_cli2.1/bin)
-    if [ "${opencga_cli21}" != "opencga.sh" ]; then
-      dx-jobutil-report-error "opencga.sh not found in the provided cli folder. As a result no further actions can be performed"
-    else
-      echo "${opencga_cli21} in ${cli_name21} is ready to use"
-    fi
 
     # Get DNAnexus file ID
     echo "Obtaining VCF file ID"
@@ -92,18 +79,16 @@ main() {
 
     # Install python dependencies
     echo "Installing requirements"
-    pip install --user -r /home/dnanexus/requirements.txt -q
+    pip install --user --no-warn-script-location -r /home/dnanexus/requirements.txt -q
 
     # Run opencga load
     echo "Launching OpenCGA upload"
     opencga_cmd="python3 opencga_upload_and_index.py --credentials /home/dnanexus/in/credentials.json \
                                                      --vcf /home/dnanexus/in/${vcf_name} \
                                                      --cli /home/dnanexus/opencga_cli/bin/opencga.sh \
-                                                     --cli21 /home/dnanexus/opencga_cli2.1/bin/opencga.sh \
-                                                     --dnanexus_fid ${dnanexus_fid}"
+                                                     --dnanexus_fid ${dnanexus_fid} "
     if [ -n "${input_metadata}" ]; then
-      opencga_cmd+=" --metadata /home/dnanexus/in/metadata.json"
-      dx download "${input_metadata}" -o /home/dnanexus/in/metadata.json
+      opencga_cmd+=" --metadata /home/dnanexus/in/metadata.zip"
     fi
     if [ -n "${input_project}" ]; then
       opencga_cmd+=" --project ${input_project}"
@@ -118,7 +103,7 @@ main() {
       opencga_cmd+=" --multifile"
     fi
     echo "${opencga_cmd}"
-    #eval "${opencga_cmd}"
+    eval "${opencga_cmd}"
 
     # To report any recognized errors in the correct format in
     # $HOME/job_error.json and exit this script, you can use the

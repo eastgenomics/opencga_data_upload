@@ -48,7 +48,7 @@ if __name__ == '__main__':
     parser.add_argument('--metadata', help='Zip file containing the metadata (minimum required information: "study")')
     parser.add_argument('--credentials', help='JSON file with credentials and host to access OpenCGA')
     parser.add_argument('--cli', help='Path to OpenCGA cli')
-    parser.add_argument('--cli21', help='Path to OpenCGA cli 2.1')
+    # parser.add_argument('--cli21', help='Path to OpenCGA cli 2.1')
     parser.add_argument('--vcf', help='Input vcf file')
     parser.add_argument('--somatic', help='Use the somatic flag if the sample to be loaded is somatic',
                         action='store_true')
@@ -63,10 +63,10 @@ if __name__ == '__main__':
         sys.exit(1)
     opencga_cli = args.cli
 
-    if not os.path.isfile(args.cli21):
-        logger.error("OpenCGA CLI 2.1 not found.")
-        sys.exit(1)
-    opencga_cli21 = args.cli21
+    # if not os.path.isfile(args.cli21):
+    #     logger.error("OpenCGA CLI 2.1 not found.")
+    #     sys.exit(1)
+    # opencga_cli21 = args.cli21
 
     # Check if metadata has been provided
     metadata = None
@@ -96,6 +96,8 @@ if __name__ == '__main__':
         # manifest['study']['id'] = 'app_test'
         project = manifest['configuration']['projectId']
         study = manifest['study']['id']
+        project = 'dnanexus'
+        study = 'app_test'
 
     # Define study FQN
     if project is not None and study is not None:
@@ -110,7 +112,7 @@ if __name__ == '__main__':
 
     # Login OpenCGA CLI
     connect_cli(credentials=credentials, opencga_cli=opencga_cli, logger=logger)
-    connect_cli(credentials=credentials, opencga_cli=opencga_cli21, logger=logger)
+    # connect_cli(credentials=credentials, opencga_cli=opencga_cli21, logger=logger)
 
     # Create pyopencga client
     oc = connect_pyopencga(credentials=credentials, logger=logger)
@@ -142,12 +144,12 @@ if __name__ == '__main__':
     # define software
     if 'tnhaplotyper2' in os.path.basename(args.vcf):
         file_data['software'] = {'name': 'TNhaplotyper2'}
+    if '.flagged.' in os.path.basename(args.vcf):
+        file_data['software'] = {'name': 'Pindel'}
     if '.SV.' in os.path.basename(args.vcf):
         file_data['software'] = {'name': 'Manta'}
     if os.path.basename(args.vcf).startswith('EH_'):
         file_data['software'] = {'name': 'ExpansionHunter'}
-    # else:
-    #     file_data['software'] = {'name': 'Pindel'}
 
     # Check the status of the file and execute the necessary actions
     uploaded, indexed, annotated, sample_index, existing_file_path, sample_ids = check_file_status(oc=oc,
@@ -162,7 +164,7 @@ if __name__ == '__main__':
                     "Path to file: {}".format(os.path.basename(args.vcf), study_fqn, existing_file_path))
     else:
         logger.info("Uploading file {} into study {}...".format(os.path.basename(args.vcf), study_fqn))
-        upload_file(opencga_cli=opencga_cli21, oc=oc, study=study_fqn, file=args.vcf, file_path=file_path,
+        upload_file(opencga_cli=opencga_cli, oc=oc, study=study_fqn, file=args.vcf, file_path=file_path,
                     file_info=file_data, logger=logger)
 
     # INDEXING
@@ -175,8 +177,8 @@ if __name__ == '__main__':
 
     # Launch variant stats index
     logger.info("Launching variant stats...")
-#    vsi_job = variant_stats_index(oc=oc, study=study_fqn, cohort='ALL', logger=logger)
-    # # TODO: Check status of this job at the end
+    vsi_job = variant_stats_index(oc=oc, study=study_fqn, cohort='ALL', logger=logger)
+    # TODO: Check status of this job at the end
 
     # ANNOTATION
     if annotated:
@@ -184,36 +186,32 @@ if __name__ == '__main__':
                                                                                    study_fqn))
     else:
         logger.info("Annotating file {} into study {}...".format(os.path.basename(args.vcf), study_fqn))
-#        annotate_variants(oc=oc, project=project, study=study, logger=logger, delay=delay)
+        annotate_variants(oc=oc, project=project, study=study, logger=logger, delay=delay)
 
     # Launch sample stats index
     logger.info("Launching sample stats...")
-    svs_job = sample_variant_stats(oc=oc, study=study_fqn, sample_ids=sample_ids, logger=logger)
+    # svs_job = sample_variant_stats(oc=oc, study=study_fqn, sample_ids=sample_ids, logger=logger)
     # TODO: Check status of this job at the end
 
     # SECONDARY ANNOTATION INDEX
     secondary_annotation_index(oc=oc, study=study_fqn, logger=logger, delay=delay)
 
-    # SECONDARY SAMPLE INDEX
-    secondary_sample_index(oc=oc, study=study_fqn, sample=sample_ids, logger=logger)
-
     # METADATA
     if metadata:
         logger.info("Loading metadata...")
-        # LOAD TEMPLATE
-        # load_template(oc=oc, study=manifest['study']['id'], template=args.metadata,
-        #               logger=logger)
-    else:
-        logger.info("No metadata provided. An individual and a case will be created using the sample name")
+    #     # LOAD TEMPLATE
+    #     # load_template(oc=oc, study=manifest['study']['id'], template=args.metadata,
+    #     #               logger=logger)
+    # else:
+    #     logger.info("No metadata provided. An individual and a case will be created using the sample name")
         # CREATE IND
         # Get sample ID
         sampleIds = oc.files.info(study=study_fqn, files=os.path.basename(args.vcf), include="sampleIds").get_result(0)['sampleIds']
+        if len(sampleIds) >= 1 and 'TA2_S59_L008_tumor' in sampleIds:
+            sampleIds.remove('TA2_S59_L008_tumor')
         if len(sampleIds) < 1:
             logger.error("Unexpected number of samples in the VCF")
             sys.exit(1)
-        else:
-            for sampleID in sampleIds:
-                oc.samples.update(study=study_fqn, samples=sampleID)
 
         # Define individual
         individual_id = individuals['id']
@@ -233,8 +231,12 @@ if __name__ == '__main__':
             oc.individuals.create(study=study_fqn, samples='{}'.format(",".join(sampleIds)), data=ind_data)
         elif check_individual > 0:
             logger.info("Individual {} already exists in the database. No action needed.".format(individual_id))
-            oc.individuals.update(study=manifest['study']['id'], individuals=individual_id, data=ind_data,
-                                  samples='{}'.format(",".join(sampleIds)), samples_action='ADD')
+            # oc.individuals.update(study=manifest['study']['id'], individuals=individual_id, data=ind_data,
+            #                       samples='{}'.format(",".join(sampleIds)), samples_action='ADD')
+        # associate sample and individual
+        for sampleID in sampleIds:
+            oc.samples.update(study=study_fqn, samples=sampleID, data={'individualId': individuals['id'],
+                                                                       'somatic': somatic})
 
     # CREATE CASE
     logger.info("Checking if clinical case exists...")
@@ -263,11 +265,14 @@ if __name__ == '__main__':
     elif check_case == 1:
         logger.info("Case {} already exists in the database.".format(clinical_case["id"]))
 
+    # SECONDARY SAMPLE INDEX
+    secondary_sample_index(oc=oc, study=study_fqn, sample=sampleIds[0], logger=logger)
+
     # Check again the status of the file
     uploaded, indexed, annotated, sample_index, existing_file_path, sample_ids = check_file_status(oc=oc,
                                                                                           study=study_fqn,
                                                                                           file_name=os.path.basename(args.vcf),
-                                                                                          attributes=file_data,
+                                                                                          file_info=file_data,
                                                                                           logger=logger, check_attributes=True)
 
     # close loggers

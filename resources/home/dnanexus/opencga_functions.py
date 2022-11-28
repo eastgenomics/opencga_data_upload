@@ -305,11 +305,11 @@ def sample_variant_stats(oc, study, sample_ids, logger):
     :param sample_ids: list of sample IDs to calculate stats on
     :param logger: logger object to generate logs
     """
-    sample_variant_stats_job = oc.variants.run_sample_stats(study=study, data={'sample': sample_ids,
+    sample_variant_stats_job = oc.variants.run_sample_stats(study=study, data={'sample': 'all',
                                                                                'index': True,
                                                                                'indexId': 'all'})
     # TODO: Add example of query with filters
-    logger.info("Computing sample variant stats for {} with job ID: {}".format(', '.join(sample_ids),
+    logger.info("Computing sample variant stats for {} with job ID: {}".format('all',
                                                                                sample_variant_stats_job.get_result(0)['id']))
     return sample_variant_stats_job.get_result(0)['id']
 
@@ -362,18 +362,18 @@ def secondary_sample_index(oc, study, sample, logger):
     secondary_sample_index_job = oc.variant_operations.variant_secondary_sample_index(study=study, data={'sample': sample})
     logger.info("Indexing sample {} in Solr with job ID: {}".format(sample, secondary_sample_index_job.get_result(0)['id']))
     # wait for job to finish
-    try:
-        oc.wait_for_job(response=secondary_sample_index_job.get_response(0))
-        status = oc.jobs.info(study=study, jobs=secondary_sample_index_job.get_result(0)['id'])
-        if status.get_result(0)['execution']['status']['name'] == 'DONE':
-            logger.info("OpenCGA job secondary sample index completed successfully")
-        else:
-            logger.info(
-                "OpenCGA job secondary sample index failed with status {}".format(
-                    status.get_result(0)['execution']['status']['name']))
-    except ValueError as ve:
-        logger.exception("OpenCGA secondary sample index job failed. {}".format(ve))
-        sys.exit(1)
+    # try:
+    #     oc.wait_for_job(response=secondary_sample_index_job.get_response(0))
+    #     status = oc.jobs.info(study=study, jobs=secondary_sample_index_job.get_result(0)['id'])
+    #     if status.get_result(0)['execution']['status']['name'] == 'DONE':
+    #         logger.info("OpenCGA job secondary sample index completed successfully")
+    #     else:
+    #         logger.info(
+    #             "OpenCGA job secondary sample index failed with status {}".format(
+    #                 status.get_result(0)['execution']['status']['name']))
+    # except ValueError as ve:
+    #     logger.exception("OpenCGA secondary sample index job failed. {}".format(ve))
+    #     sys.exit(1)
     return secondary_sample_index_job
 
 
