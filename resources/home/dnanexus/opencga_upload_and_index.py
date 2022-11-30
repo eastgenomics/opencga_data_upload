@@ -40,6 +40,29 @@ logger.addHandler(console)
 no_delay_priority = ['URGENT']
 
 
+def link_metadata_vcfs(metadata_files, vcf_files):
+    """ Create list of lists containing the metadata corresponding to vcfs
+
+    Args:
+        metadata_files (list): List of metadata files
+        vcf_files (list): List of vcf files
+
+    Returns:
+        list: List of lists
+    """
+
+    data = []
+
+    for file in metadata_files:
+        # get the sample name + other info
+        full_name = file.split(".")[0]
+        # look for the vcf files that have the name in them
+        vcfs = [i for i in vcf_files if full_name in i]
+        data.append(vcfs+[file])
+
+    return data
+
+
 if __name__ == '__main__':
     # Set the arguments of the command line
     parser = argparse.ArgumentParser(description=' Load VCFs from DNANexus into OpenCGA')
@@ -67,9 +90,11 @@ if __name__ == '__main__':
     metadata = None
     project = args.project
     study = args.study
-    if args.metadata is not None and os.path.isfile(args.metadata):
+    if args.metadata is not None:
         metadata = True
         logger.info("Metadata file provided: {}".format(args.metadata))
+        # Link vcfs and metadata together
+        vcf_with_metadata = link_metadata_vcfs(args.metadata, args.vcf)
     else:
         metadata = False
         logger.info("No metadata has been provided, VCF will not be associated to any individuals or cases")
