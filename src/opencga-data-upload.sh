@@ -95,26 +95,8 @@ main() {
         fi
     fi
 
-    # Note however that this entire bash script is executed with -e
-    # when running in the cloud, so any line which returns a nonzero
-    # exit code will prematurely exit the script; if no error was
-    # reported in the job_error.json file, then the failure reason
-    # will be AppInternalError with a generic error message.
-
-    # The following line(s) use the dx command-line tool to upload your file
-    # outputs after you have created them on the local file system.  It assumes
-    # that you have used the output field name for the filename for each output,
-    # but you can change that behavior to suit your needs.  Run "dx upload -h"
-    # to see more options to set metadata.
-
     opencga_out=$(dx upload /home/dnanexus/opencga_loader.out --brief)
     opencga_err=$(dx upload /home/dnanexus/opencga_loader.err --brief)
-
-    # The following line(s) use the utility dx-jobutil-add-output to format and
-    # add output variables to your job's output as appropriate for the output
-    # class.  Run "dx-jobutil-add-output -h" for more information on what it
-    # does.
-
 
     dx-jobutil-add-output opencga_out "${opencga_out}" --class=file
     dx-jobutil-add-output opencga_err "${opencga_err}" --class=file
