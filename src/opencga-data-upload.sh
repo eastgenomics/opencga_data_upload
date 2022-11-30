@@ -38,6 +38,7 @@ main() {
 
     # Download openCGA CLI and uncompress
     echo "Getting the OpenCGA CLI"
+    # cli file id is stored in the credentials file
     dx download ${opencga_cli_file_id}
     cli_name=$(dx describe "${opencga_cli_file_id}" --name)
     mkdir -p /home/dnanexus/opencga_cli && tar -xzf ${cli_name} -C /home/dnanexus/opencga_cli --strip-components 1
