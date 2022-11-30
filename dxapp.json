@@ -8,7 +8,7 @@
     {
       "name": "input_vcf",
       "label": "VCF to be uploaded",
-      "class": "file",
+      "class": "array:file",
       "optional": false,
       "patterns": ["*.vcf", "*.vcf.gz"],
       "help": ""
@@ -16,7 +16,7 @@
     {
       "name": "input_metadata",
       "label": "Metadata file",
-      "class": "file",
+      "class": "array:file",
       "optional": true,
       "patterns": ["*"],
       "help": "Zip file containing multiple YAML files with information about the study and the clinical metadata to be loaded"
