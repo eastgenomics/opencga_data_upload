@@ -128,8 +128,8 @@ if __name__ == '__main__':
 
     # Read metadata file
     if metadata:
-        for data in vcf_with_metadata:
-            manifest, samples, individuals, clinical = read_metadata(metadata_file=args.metadata, logger=logger)
+        for vcf_file, metadata_file in vcf_with_metadata:
+            manifest, samples, individuals, clinical = read_metadata(metadata_file=metadata_file, logger=logger)
             '''
             Overwrite project and study to point to the test project
             TO BE CHANGED
@@ -157,37 +157,37 @@ if __name__ == '__main__':
             }
 
             # define software
-            if 'tnhaplotyper2' in os.path.basename(args.vcf):
+            if 'tnhaplotyper2' in os.path.basename(vcf_file):
                 file_data['software'] = {'name': 'TNhaplotyper2'}
-            if '.flagged.' in os.path.basename(args.vcf):
+            if '.flagged.' in os.path.basename(vcf_file):
                 file_data['software'] = {'name': 'Pindel'}
-            if '.SV.' in os.path.basename(args.vcf):
+            if '.SV.' in os.path.basename(vcf_file):
                 file_data['software'] = {'name': 'Manta'}
-            if os.path.basename(args.vcf).startswith('EH_'):
+            if os.path.basename(vcf_file).startswith('EH_'):
                 file_data['software'] = {'name': 'ExpansionHunter'}
 
             # Check the status of the file and execute the necessary actions
             uploaded, indexed, annotated, sample_index, existing_file_path, sample_ids = check_file_status(oc=oc,
                                                                                                 study=study_fqn,
-                                                                                                file_name=os.path.basename(args.vcf),
+                                                                                                file_name=os.path.basename(vcf_file),
                                                                                                 file_info=file_data,
                                                                                                 logger=logger, check_attributes=True)
 
             # UPLOAD
             if uploaded:
                 logger.info("File {} already exists in the OpenCGA study {}. "
-                            "Path to file: {}".format(os.path.basename(args.vcf), study_fqn, existing_file_path))
+                            "Path to file: {}".format(os.path.basename(vcf_file), study_fqn, existing_file_path))
             else:
-                logger.info("Uploading file {} into study {}...".format(os.path.basename(args.vcf), study_fqn))
-                upload_file(opencga_cli=opencga_cli, oc=oc, study=study_fqn, file=args.vcf, file_path=file_path,
+                logger.info("Uploading file {} into study {}...".format(os.path.basename(vcf_file), study_fqn))
+                upload_file(opencga_cli=opencga_cli, oc=oc, study=study_fqn, file=vcf_file, file_path=file_path,
                             file_info=file_data, logger=logger)
 
             # INDEXING
             if indexed:
-                logger.info("File {} is indexed in the OpenCGA study {}.".format(os.path.basename(args.vcf), study_fqn))
+                logger.info("File {} is indexed in the OpenCGA study {}.".format(os.path.basename(vcf_file), study_fqn))
             else:
-                logger.info("Indexing file {} into study {}...".format(os.path.basename(args.vcf), study_fqn))
-                index_file(oc=oc, study=study_fqn, file=os.path.basename(args.vcf), logger=logger,
+                logger.info("Indexing file {} into study {}...".format(os.path.basename(vcf_file), study_fqn))
+                index_file(oc=oc, study=study_fqn, file=os.path.basename(vcf_file), logger=logger,
                         somatic=somatic, multifile=multi_file)
 
             # Launch variant stats index
@@ -197,10 +197,10 @@ if __name__ == '__main__':
 
             # ANNOTATION
             if annotated:
-                logger.info("File {} is already annotated in the OpenCGA study {}.".format(os.path.basename(args.vcf),
+                logger.info("File {} is already annotated in the OpenCGA study {}.".format(os.path.basename(vcf_file),
                                                                                         study_fqn))
             else:
-                logger.info("Annotating file {} into study {}...".format(os.path.basename(args.vcf), study_fqn))
+                logger.info("Annotating file {} into study {}...".format(os.path.basename(vcf_file), study_fqn))
                 annotate_variants(oc=oc, project=project, study=study, logger=logger, delay=delay)
 
             # Launch sample stats index
@@ -218,7 +218,7 @@ if __name__ == '__main__':
 
             # CREATE IND
             # Get sample ID
-            sampleIds = oc.files.info(study=study_fqn, files=os.path.basename(args.vcf), include="sampleIds").get_result(0)['sampleIds']
+            sampleIds = oc.files.info(study=study_fqn, files=os.path.basename(vcf_file), include="sampleIds").get_result(0)['sampleIds']
             if len(sampleIds) >= 1 and 'TA2_S59_L008_tumor' in sampleIds:
                 sampleIds.remove('TA2_S59_L008_tumor')
             if len(sampleIds) < 1:
@@ -283,7 +283,7 @@ if __name__ == '__main__':
             # Check again the status of the file
             uploaded, indexed, annotated, sample_index, existing_file_path, sample_ids = check_file_status(oc=oc,
                                                                                                 study=study_fqn,
-                                                                                                file_name=os.path.basename(args.vcf),
+                                                                                                file_name=os.path.basename(vcf_file),
                                                                                                 file_info=file_data,
                                                                                                 logger=logger, check_attributes=True)
 
