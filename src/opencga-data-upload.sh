@@ -57,14 +57,27 @@ main() {
     echo "Installing requirements"
     pip install pyopencga-2.4.9-py3-none-any.whl
 
+    vcf_string=""
+    # Gather all vcfs for passing to the python script and build string to pass
+    for vcf in $(ls ~/in/input_vcf/); do
+      vcf_string+=" ~/in/input_vcf/${vcf}"
+    done
+
     # Run opencga load
     echo "Launching OpenCGA upload"
     opencga_cmd="python3 opencga_upload_and_index.py --credentials ~/in/input_credentials/${input_credentials_name} \
-                                                     --vcf /home/dnanexus/in/${vcf_name} \
+                                                     --vcf ${vcf_string} \
                                                      --cli /home/dnanexus/opencga_cli/bin/opencga.sh \
                                                      --dnanexus_fid ${dnanexus_fid} "
     if [ -n "${input_metadata}" ]; then
-      opencga_cmd+=" --metadata /home/dnanexus/in/metadata.zip"
+      # Gather metadata files and build string to pass
+      metadata_string+=" --metadata"
+
+      for metadata in $(ls ~/in/input_metadata/); do
+        metadata_string+=" ~/in/input_metadata/${metadata}"
+      done
+
+      opencga_cmd+=" ${metadata_string}"
     fi
     if [ -n "${input_project}" ]; then
       opencga_cmd+=" --project ${input_project}"
