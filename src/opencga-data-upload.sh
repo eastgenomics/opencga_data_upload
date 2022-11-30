@@ -81,10 +81,6 @@ main() {
     echo "${opencga_cmd}"
     eval "${opencga_cmd}"
 
-    # To report any recognized errors in the correct format in
-    # $HOME/job_error.json and exit this script, you can use the
-    # dx-jobutil-report-error utility as follows:
-
     if [ -f /home/dnanexus/opencga_loader.err ]; then
         if [ -s /home/dnanexus/opencga_loader.err ]; then
             cat
