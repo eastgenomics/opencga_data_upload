@@ -45,11 +45,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=' Load VCFs from DNANexus into OpenCGA')
     parser.add_argument('--project', help='OpenCGA Project where the file will be loaded')
     parser.add_argument('--study', help='OpenCGA Study where the file will be loaded')
-    parser.add_argument('--metadata', help='Zip file containing the metadata (minimum required information: "study")')
+    parser.add_argument('--metadata', nargs="+", help='Zip file containing the metadata (minimum required information: "study")')
     parser.add_argument('--credentials', help='JSON file with credentials and host to access OpenCGA')
     parser.add_argument('--cli', help='Path to OpenCGA cli')
     # parser.add_argument('--cli21', help='Path to OpenCGA cli 2.1')
-    parser.add_argument('--vcf', help='Input vcf file')
+    parser.add_argument('--vcf', nargs="+", help='Input vcf file')
     parser.add_argument('--somatic', help='Use the somatic flag if the sample to be loaded is somatic',
                         action='store_true')
     parser.add_argument('--multifile', help='Use the multifile flag if you expect to load multiple files from this '
@@ -62,11 +62,6 @@ if __name__ == '__main__':
         logger.error("OpenCGA CLI not found.")
         sys.exit(1)
     opencga_cli = args.cli
-
-    # if not os.path.isfile(args.cli21):
-    #     logger.error("OpenCGA CLI 2.1 not found.")
-    #     sys.exit(1)
-    # opencga_cli21 = args.cli21
 
     # Check if metadata has been provided
     metadata = None
