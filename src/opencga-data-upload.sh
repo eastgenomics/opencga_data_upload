@@ -53,10 +53,10 @@ main() {
     # array inputs end up in subdirectories (i.e. ~/in/array-input/0/), flatten to parent dir
     find ~/in/input_vcf -type f -name "*" -print0 | xargs -0 -I {} mv {} ~/in/input_vcf
     find ~/in/input_metadata -type f -name "*" -print0 | xargs -0 -I {} mv {} ~/in/input_metadata
-    # location of input_credentials is ~/in/input_credentials/*
+    # location of input_credentials is ~/in/input_credentials/
 
     # Read credentials file
-    read_cred /home/dnanexus/in/credentials.json
+    read_cred ~/in/input_credentials/${input_credentials_name}
 
     # Download openCGA CLI and uncompress
     echo "Getting the OpenCGA CLI"
@@ -80,7 +80,7 @@ main() {
 
     # Run opencga load
     echo "Launching OpenCGA upload"
-    opencga_cmd="python3 opencga_upload_and_index.py --credentials /home/dnanexus/in/credentials.json \
+    opencga_cmd="python3 opencga_upload_and_index.py --credentials ~/in/input_credentials/${input_credentials_name} \
                                                      --vcf /home/dnanexus/in/${vcf_name} \
                                                      --cli /home/dnanexus/opencga_cli/bin/opencga.sh \
                                                      --dnanexus_fid ${dnanexus_fid} "
