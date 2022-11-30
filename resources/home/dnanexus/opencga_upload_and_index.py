@@ -58,7 +58,9 @@ def link_metadata_vcfs(metadata_files, vcf_files):
         full_name = file.split(".")[0]
         # look for the vcf files that have the name in them
         vcfs = [i for i in vcf_files if full_name in i]
-        data.append(vcfs+[file])
+
+        for vcf in vcfs:
+            data.append([vcf, file])
 
     return data
 
