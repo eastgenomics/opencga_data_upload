@@ -79,7 +79,7 @@ main() {
 
     # Install python dependencies
     echo "Installing requirements"
-    pip install --user --no-warn-script-location -r /home/dnanexus/requirements.txt -q
+    pip install pyopencga-2.4.9-py3-none-any.whl
 
     # Run opencga load
     echo "Launching OpenCGA upload"
