@@ -47,16 +47,13 @@ main() {
     vcf_name=$(dx describe "${input_vcf}" --name)
     echo "${vcf_name}"
 
-    echo "Downloading input files"
-    dx download "${input_vcf}" -o /home/dnanexus/in/"${vcf_name}"
-    echo "VCF downloaded"
-    dx download "${input_credentials}" -o /home/dnanexus/in/credentials.json
-    echo "Credentials downloaded"
-    if [ "${input_metadata}" ]; then
-      echo "Downloading ${input_metadata}..."
-      dx download "${input_metadata}" -o /home/dnanexus/in/metadata.zip
-      echo "Metadata downloaded"
-    fi
+    # Download inputs in parallel
+    time dx-download-all-inputs --parallel
+
+    # array inputs end up in subdirectories (i.e. ~/in/array-input/0/), flatten to parent dir
+    find ~/in/input_vcf -type f -name "*" -print0 | xargs -0 -I {} mv {} ~/in/input_vcf
+    find ~/in/input_metadata -type f -name "*" -print0 | xargs -0 -I {} mv {} ~/in/input_metadata
+    # location of input_credentials is ~/in/input_credentials/*
 
     # Read credentials file
     read_cred /home/dnanexus/in/credentials.json
