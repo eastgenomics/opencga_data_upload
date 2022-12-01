@@ -48,10 +48,11 @@ main() {
 
     # Install python dependencies
     echo "Installing requirements"
-    sudo -H python3 -m pip install --no-index --no-deps
+    sudo -H python3 -m pip install --no-index --no-deps packages/*.whl
 
     # install dxpy
-    python packages/setup.py install
+    tar xzf dxpy-0.333.0.tar.gz
+    python packages/dxpy-0.333.0.tar.gz/setup.py install
 
     # Gather all vcfs for passing to the python script and build string to pass
     vcf_string=$(find ~/in/vcfs/ -type f)
