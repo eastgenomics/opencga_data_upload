@@ -76,7 +76,7 @@ if __name__ == '__main__':
                         action='store_true')
     parser.add_argument('--multifile', help='Use the multifile flag if you expect to load multiple files from this '
                                             'sample', action='store_true')
-    parser.add_argument('--dnanexus_fid', help='DNA nexus file ID')
+    parser.add_argument('--dnanexus_project', help='DNAnexus project ID')
     args = parser.parse_args()
 
     # Check the location of the OpenCGA CLI
