@@ -21,10 +21,6 @@ main() {
     # Download inputs in the "in" folder
     mkdir -p /home/dnanexus/in
 
-    # Get the original name of the VCF file
-    vcf_name=$(dx describe "${vcfs}" --name)
-    echo "${vcf_name}"
-
     # Download inputs in parallel
     time dx-download-all-inputs --parallel
 
@@ -49,10 +45,6 @@ main() {
       echo "${opencga_cli} in ${cli_name} is ready to use"
     fi
 
-    # Get DNAnexus file ID
-    echo "Obtaining VCF file ID"
-    dnanexus_fid=$(dx describe "${vcfs}" --json | jq -r '.id')
-
     # Install python dependencies
     echo "Installing requirements"
     pip install pyopencga-2.4.9-py3-none-any.whl
@@ -64,8 +56,7 @@ main() {
     echo "Launching OpenCGA upload"
     opencga_cmd="python3 opencga_upload_and_index.py --credentials ~/in/input_credentials/${input_credentials_name} \
                                                      --vcf ${vcf_string} \
-                                                     --cli /home/dnanexus/opencga_cli/bin/opencga.sh \
-                                                     --dnanexus_fid ${dnanexus_fid} "
+                                                     --cli /home/dnanexus/opencga_cli/bin/opencga.sh "
     if [ -n "${input_metadata}" ]; then
       # Gather metadata files and build string to pass
       metadata_string+=" --metadata "
