@@ -47,7 +47,7 @@ main() {
 
     # Install python dependencies
     echo "Installing requirements"
-    pip install pyopencga-2.4.9-py3-none-any.whl
+    sudo -H python3 -m pip install --no-index --no-deps
 
     # Gather all vcfs for passing to the python script and build string to pass
     vcf_string=$(find ~/in/vcfs/ -type f)
