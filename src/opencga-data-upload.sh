@@ -83,10 +83,10 @@ main() {
     if [ -f /home/dnanexus/opencga_loader.err ]; then
         if [ -s /home/dnanexus/opencga_loader.err ]; then
             cat
-                dx-jobutil-report-error "ERROR: Failed to load VCF ${vcf_name} into OpenCGA. See
+                dx-jobutil-report-error "ERROR: Failed to load VCFs into OpenCGA. See
                 /home/dnanexus/opencga_loader.err for more details."
         else
-            echo "VCF ${vcf_name} was loaded successfully to OpenCGA"
+            echo "VCFs was loaded successfully to OpenCGA"
         fi
     fi
 
