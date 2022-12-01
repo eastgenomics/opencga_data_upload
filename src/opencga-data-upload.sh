@@ -39,6 +39,7 @@ main() {
     cli_name=$(dx describe "${opencga_cli_file_id}" --name)
     mkdir -p /home/dnanexus/opencga_cli && tar -xzf ${cli_name} -C /home/dnanexus/opencga_cli --strip-components 1
     opencga_cli=$(ls /home/dnanexus/opencga_cli/bin)
+
     if [ "${opencga_cli}" != "opencga.sh" ]; then
       dx-jobutil-report-error "opencga.sh not found in the provided cli folder. As a result no further actions can be performed"
     else
@@ -56,13 +57,12 @@ main() {
     echo "Launching OpenCGA upload"
     opencga_cmd="python3 opencga_upload_and_index.py --credentials ~/in/input_credentials/${input_credentials_name} \
                                                      --vcf ${vcf_string} \
-                                                     --cli /home/dnanexus/opencga_cli/bin/opencga.sh "
+                                                     --cli /home/dnanexus/opencga_cli/bin/opencga.sh \
+                                                     --dnanexus_project ${DX_PROJECT_CONTEXT_ID}"
     if [ -n "${input_metadata}" ]; then
       # Gather metadata files and build string to pass
       metadata_string=" --metadata "
-
       metadata_string+=$(find ~/in/input_metadata/ -type f)
-
       opencga_cmd+=" ${metadata_string}"
     fi
     if [ -n "${input_project}" ]; then
