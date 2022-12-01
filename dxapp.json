@@ -6,8 +6,8 @@
   "version": "0.0.1",
   "inputSpec": [
     {
-      "name": "input_vcf",
-      "label": "VCF to be uploaded",
+      "name": "vcfs",
+      "label": "VCFs to be uploaded",
       "class": "array:file",
       "optional": false,
       "patterns": ["*.vcf", "*.vcf.gz"],
