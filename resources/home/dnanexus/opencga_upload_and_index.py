@@ -14,6 +14,8 @@ from subprocess import PIPE
 from opencga_functions import *
 import re
 
+import dxpy
+
 
 # Define logger handlers (one file for logs and one for errors)
 logger = logging.getLogger()
@@ -142,45 +144,53 @@ if __name__ == '__main__':
     if clinical[0]['type'] == 'CANCER':
         multi_file = True
 
-    # Format DNA Nexus file ID to attributes
-    file_data = {}
-    file_data["attributes"] = {
-        "DNAnexusFileId": args.dnanexus_fid
-    }
+    # go through each vcf and upload and index them
+    for vcf in vcf_data:
+        study_fqn = vcf_data[vcf]["study_fqn"]
+        # find dnanexus id
+        vcf_object = dxpy.find_one_data_object(
+            classname="file", name=vcf, project=args.dnanexus_project,
+            more_ok=False
+        )
+        # Format DNAnexus file ID to attributes
+        file_data = {}
+        file_data["attributes"] = {
+            "DNAnexusFileId": vcf_object.get_id()
+        }
 
-    # define software
-    if 'tnhaplotyper2' in os.path.basename(vcf_file):
-        file_data['software'] = {'name': 'TNhaplotyper2'}
-    if '.flagged.' in os.path.basename(vcf_file):
-        file_data['software'] = {'name': 'Pindel'}
-    if '.SV.' in os.path.basename(vcf_file):
-        file_data['software'] = {'name': 'Manta'}
-    if os.path.basename(vcf_file).startswith('EH_'):
-        file_data['software'] = {'name': 'ExpansionHunter'}
+        # define software
+        if 'tnhaplotyper2' in os.path.basename(vcf):
+            file_data['software'] = {'name': 'TNhaplotyper2'}
+        if '.flagged.' in os.path.basename(vcf):
+            file_data['software'] = {'name': 'Pindel'}
+        if '.SV.' in os.path.basename(vcf):
+            file_data['software'] = {'name': 'Manta'}
+        if os.path.basename(vcf).startswith('EH_'):
+            file_data['software'] = {'name': 'ExpansionHunter'}
 
-    # Check the status of the file and execute the necessary actions
-    uploaded, indexed, annotated, sample_index, existing_file_path, sample_ids = check_file_status(oc=oc,
-                                                                                        study=study_fqn,
-                                                                                        file_name=os.path.basename(vcf_file),
-                                                                                        file_info=file_data,
-                                                                                        logger=logger, check_attributes=True)
+        # Check the status of the file and execute the necessary actions
+        uploaded, indexed, annotated, sample_index, existing_file_path, sample_ids = check_file_status(oc=oc,
+                                                                                            study=study_fqn,
+                                                                                            file_name=os.path.basename(vcf),
+                                                                                            file_info=file_data,
+                                                                                            logger=logger, check_attributes=True)
 
-    # UPLOAD
-    if uploaded:
-        logger.info("File {} already exists in the OpenCGA study {}. "
-                    "Path to file: {}".format(os.path.basename(vcf_file), study_fqn, existing_file_path))
-    else:
-        logger.info("Uploading file {} into study {}...".format(os.path.basename(vcf_file), study_fqn))
-        upload_file(opencga_cli=opencga_cli, oc=oc, study=study_fqn, file=vcf_file, file_path=file_path,
-                    file_info=file_data, logger=logger)
+        # UPLOAD
+        if uploaded:
+            logger.info("File {} already exists in the OpenCGA study {}. "
+                        "Path to file: {}".format(os.path.basename(vcf), study_fqn, existing_file_path))
+        else:
+            logger.info("Uploading file {} into study {}...".format(os.path.basename(vcf), study_fqn))
+            upload_file(opencga_cli=opencga_cli, oc=oc, study=study_fqn, file=vcf, file_path=file_path,
+                        file_info=file_data, logger=logger)
 
-    # INDEXING
-    if indexed:
-        logger.info("File {} is indexed in the OpenCGA study {}.".format(os.path.basename(vcf_file), study_fqn))
-    else:
-        logger.info("Indexing file {} into study {}...".format(os.path.basename(vcf_file), study_fqn))
-        index_file(oc=oc, study=study_fqn, file=os.path.basename(vcf_file), logger=logger,
-                somatic=somatic, multifile=multi_file)
+        # INDEXING
+        if indexed:
+            logger.info("File {} is indexed in the OpenCGA study {}.".format(os.path.basename(vcf), study_fqn))
+        else:
+            logger.info("Indexing file {} into study {}...".format(os.path.basename(vcf), study_fqn))
+            index_file(oc=oc, study=study_fqn, file=os.path.basename(vcf), logger=logger,
+                    somatic=somatic, multifile=multi_file)
 
     # Launch variant stats index
     logger.info("Launching variant stats...")
