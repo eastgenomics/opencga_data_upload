@@ -77,7 +77,7 @@ if __name__ == '__main__':
     parser.add_argument('--somatic', help='Use the somatic flag if the sample to be loaded is somatic',
                         action='store_true')
     parser.add_argument('--multifile', help='Use the multifile flag if you expect to load multiple files from this '
-                                            'sample', action='store_true')
+                                            'sample', default=False, action='store_true')
     parser.add_argument('--dnanexus_project', help='DNAnexus project ID')
     args = parser.parse_args()
 
@@ -94,7 +94,7 @@ if __name__ == '__main__':
     vcf_data = {}
 
     if args.metadata is not None:
-        logger.info("Metadata file provided: {}".format(args.metadata))
+        logger.info("Metadata files provided")
         # Link vcfs and metadata together
         vcf_with_metadata = link_metadata_vcfs(args.metadata, args.vcf)
 
@@ -103,6 +103,23 @@ if __name__ == '__main__':
             vcf_data[vcf_file]["project"] = manifest['configuration']['projectId']
             vcf_data[vcf_file]["study"] = manifest['study']['id']
             vcf_data[vcf_file]["study_fqn"] = f"{manifest['configuration']['projectId']}:{manifest['study']['id']}"
+            vcf_data[vcf_file]["samples"] = samples
+            vcf_data[vcf_file]["individuals"] = individuals
+            vcf_data[vcf_file]["clinical"] = clinical
+            # Get case priority. If case priority is URGENT, jobs will not be delayed
+            delay = True
+            priority = clinical[0]['priority']['id']
+            if priority in no_delay_priority:
+                delay = False
+
+            vcf_data[vcf_file]["delay"] = delay
+
+            multi_file = args.multifile
+
+            if clinical[0]['type'] == 'CANCER':
+                multi_file = True
+
+            vcf_data[vcf_file]["multi_file"] = multi_file
     else:
         logger.info("No metadata has been provided, VCF will not be associated to any individuals or cases")
         if args.project is not None and args.study is not None:
@@ -110,6 +127,9 @@ if __name__ == '__main__':
                 vcf_data[vcf_file]["project"] = project
                 vcf_data[vcf_file]["study"] = study
                 vcf_data[vcf_file]["study_fqn"] = f"{project}:{study}"
+                vcf_data[vcf_file]["samples"] = None
+                vcf_data[vcf_file]["individuals"] = None
+                vcf_data[vcf_file]["clinical"] = None
 
             logger.info("Data will be loaded in study: {}:{}".format(project, study))
         else:
@@ -133,20 +153,11 @@ if __name__ == '__main__':
 
     # Check study to define index type
     somatic = args.somatic
-    multi_file = args.multifile
-
-    # Get case priority. If case priority is URGENT, jobs will not be delayed
-    delay = True
-    priority = clinical[0]['priority']['id']
-    if priority in no_delay_priority:
-        delay = False
-
-    if clinical[0]['type'] == 'CANCER':
-        multi_file = True
 
     # go through each vcf and upload and index them
     for vcf in vcf_data:
         study_fqn = vcf_data[vcf]["study_fqn"]
+        multi_file = vcf_data[vcf]["multi_file"]
         # find dnanexus id
         vcf_object = dxpy.find_one_data_object(
             classname="file", name=vcf, project=args.dnanexus_project,
@@ -203,7 +214,7 @@ if __name__ == '__main__':
                                                                                 study_fqn))
     else:
         logger.info("Annotating file {} into study {}...".format(os.path.basename(vcf_file), study_fqn))
-        annotate_variants(oc=oc, project=project, study=study, logger=logger, delay=delay)
+        annotate_variants(oc=oc, project=project, study=study, logger=logger)
 
     # Launch sample stats index
     logger.info("Launching sample stats...")
@@ -211,83 +222,90 @@ if __name__ == '__main__':
     # TODO: Check status of this job at the end
 
     # SECONDARY ANNOTATION INDEX
-    secondary_annotation_index(oc=oc, study=study_fqn, logger=logger, delay=delay)
+    secondary_annotation_index(oc=oc, study=study_fqn, logger=logger)
 
     logger.info("Loading metadata...")
     # LOAD TEMPLATE
     # load_template(oc=oc, study=manifest['study']['id'], template=args.metadata,
     #               logger=logger)
 
-    # CREATE IND
-    # Get sample ID
-    sampleIds = oc.files.info(study=study_fqn, files=os.path.basename(vcf_file), include="sampleIds").get_result(0)['sampleIds']
-    if len(sampleIds) >= 1 and 'TA2_S59_L008_tumor' in sampleIds:
-        sampleIds.remove('TA2_S59_L008_tumor')
-    if len(sampleIds) < 1:
-        logger.error("Unexpected number of samples in the VCF")
-        sys.exit(1)
+    for vcf in vcf_data:
+        individuals = vcf_data[vcf]["individuals"]
+        samples = vcf_data[vcf]["samples"]
+        clinical = vcf_data[vcf]["individuals"]
 
-    # Define individual
-    individual_id = individuals['id']
-    ind_data = {
-        'id': individual_id,
-        'name': individual_id,
-        'disorders': [{
-            'id': 'HaemOnc'
-        }],
-        'sex': individuals['sex']
-    }
-    # Check if individual exists
-    logger.info("Checking if individual exists...")
-    check_individual = oc.individuals.search(study=study_fqn, id=individual_id).get_num_results()
-    if check_individual == 0:
-        logger.info("Creating new individual {}...".format(individual_id))
-        oc.individuals.create(study=study_fqn, samples='{}'.format(",".join(sampleIds)), data=ind_data)
-    elif check_individual > 0:
-        logger.info("Individual {} already exists in the database. No action needed.".format(individual_id))
-        # oc.individuals.update(study=manifest['study']['id'], individuals=individual_id, data=ind_data,
-        #                       samples='{}'.format(",".join(sampleIds)), samples_action='ADD')
-    # associate sample and individual
-    for sampleID in sampleIds:
-        oc.samples.update(study=study_fqn, samples=sampleID, data={'individualId': individuals['id'],
-                                                                'somatic': somatic})
+        if individuals and samples and clinical:
+            study_fqn = vcf_data[vcf]["study_fqn"]
+            # CREATE IND
+            # Get sample ID
+            sampleIds = oc.files.info(study=study_fqn, files=os.path.basename(vcf), include="sampleIds").get_result(0)['sampleIds']
+            if len(sampleIds) >= 1 and 'TA2_S59_L008_tumor' in sampleIds:
+                sampleIds.remove('TA2_S59_L008_tumor')
+            if len(sampleIds) < 1:
+                logger.error("Unexpected number of samples in the VCF")
+                sys.exit(1)
 
-    # CREATE CASE
-    logger.info("Checking if clinical case exists...")
-    clinical_case = {
-        'id': clinical[0]['id'],
-        'type': clinical[0]['type'],
-        'proband': {
-            'id': individuals['id'],
-            'samples': [{
-                'id': samples[0]['id'],
-            }]
-        },
-        'disorder': clinical[0]['disorder'],
-        'panels': [{'id': 'myeloid_genes'}],
-        'priority': clinical[0]['priority'],
-        'comments': [{
-            'message': 'Case created automatically',
-            'tags': ['auto', 'validation']
-        }],
-        'status': {'id': 'READY_FOR_INTERPRETATION'}
-    }
-    check_case = oc.clinical.search(study=study_fqn, id=clinical_case["id"]).get_num_results()
-    if check_case == 0:
-        logger.info("Creating new clinical case {}...".format(clinical_case["id"]))
-        oc.clinical.create(data=clinical_case, study=study_fqn, createDefaultInterpretation=True)
-    elif check_case == 1:
-        logger.info("Case {} already exists in the database.".format(clinical_case["id"]))
+            # Define individual
+            individual_id = individuals['id']
+            ind_data = {
+                'id': individual_id,
+                'name': individual_id,
+                'disorders': [{
+                    'id': 'HaemOnc'
+                }],
+                'sex': individuals['sex']
+            }
+            # Check if individual exists
+            logger.info("Checking if individual exists...")
+            check_individual = oc.individuals.search(study=study_fqn, id=individual_id).get_num_results()
+            if check_individual == 0:
+                logger.info("Creating new individual {}...".format(individual_id))
+                oc.individuals.create(study=study_fqn, samples='{}'.format(",".join(sampleIds)), data=ind_data)
+            elif check_individual > 0:
+                logger.info("Individual {} already exists in the database. No action needed.".format(individual_id))
+                # oc.individuals.update(study=manifest['study']['id'], individuals=individual_id, data=ind_data,
+                #                       samples='{}'.format(",".join(sampleIds)), samples_action='ADD')
+            # associate sample and individual
+            for sampleID in sampleIds:
+                oc.samples.update(study=study_fqn, samples=sampleID, data={'individualId': individuals['id'],
+                                                                        'somatic': somatic})
 
-    # SECONDARY SAMPLE INDEX
-    secondary_sample_index(oc=oc, study=study_fqn, sample=sampleIds[0], logger=logger)
+            # CREATE CASE
+            logger.info("Checking if clinical case exists...")
+            clinical_case = {
+                'id': clinical[0]['id'],
+                'type': clinical[0]['type'],
+                'proband': {
+                    'id': individuals['id'],
+                    'samples': [{
+                        'id': samples[0]['id'],
+                    }]
+                },
+                'disorder': clinical[0]['disorder'],
+                'panels': [{'id': 'myeloid_genes'}],
+                'priority': clinical[0]['priority'],
+                'comments': [{
+                    'message': 'Case created automatically',
+                    'tags': ['auto', 'validation']
+                }],
+                'status': {'id': 'READY_FOR_INTERPRETATION'}
+            }
+            check_case = oc.clinical.search(study=study_fqn, id=clinical_case["id"]).get_num_results()
+            if check_case == 0:
+                logger.info("Creating new clinical case {}...".format(clinical_case["id"]))
+                oc.clinical.create(data=clinical_case, study=study_fqn, createDefaultInterpretation=True)
+            elif check_case == 1:
+                logger.info("Case {} already exists in the database.".format(clinical_case["id"]))
 
-    # Check again the status of the file
-    uploaded, indexed, annotated, sample_index, existing_file_path, sample_ids = check_file_status(oc=oc,
-                                                                                        study=study_fqn,
-                                                                                        file_name=os.path.basename(vcf_file),
-                                                                                        file_info=file_data,
-                                                                                        logger=logger, check_attributes=True)
+            # SECONDARY SAMPLE INDEX
+            secondary_sample_index(oc=oc, study=study_fqn, sample=sampleIds[0], logger=logger)
+
+            # Check again the status of the file
+            uploaded, indexed, annotated, sample_index, existing_file_path, sample_ids = check_file_status(oc=oc,
+                                                                                                study=study_fqn,
+                                                                                                file_name=os.path.basename(vcf),
+                                                                                                file_info=file_data,
+                                                                                                logger=logger, check_attributes=True)
 
     # close loggers
     oh.close()
