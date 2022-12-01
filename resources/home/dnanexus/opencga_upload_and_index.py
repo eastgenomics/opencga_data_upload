@@ -67,11 +67,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=' Load VCFs from DNANexus into OpenCGA')
     parser.add_argument('--project', help='OpenCGA Project where the file will be loaded')
     parser.add_argument('--study', help='OpenCGA Study where the file will be loaded')
-    parser.add_argument('--metadata', nargs="+", help='Zip file containing the metadata (minimum required information: "study")')
+    parser.add_argument('--metadata', nargs="+", help='Zip file(s) containing the metadata (minimum required information: "study")')
     parser.add_argument('--credentials', help='JSON file with credentials and host to access OpenCGA')
     parser.add_argument('--cli', help='Path to OpenCGA cli')
     # parser.add_argument('--cli21', help='Path to OpenCGA cli 2.1')
-    parser.add_argument('--vcf', nargs="+", help='Input vcf file')
+    parser.add_argument('--vcf', nargs="+", help='Input vcf(s) file')
     parser.add_argument('--somatic', help='Use the somatic flag if the sample to be loaded is somatic',
                         action='store_true')
     parser.add_argument('--multifile', help='Use the multifile flag if you expect to load multiple files from this '
