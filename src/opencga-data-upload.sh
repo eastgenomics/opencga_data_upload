@@ -59,9 +59,9 @@ main() {
                                                      --cli /home/dnanexus/opencga_cli/bin/opencga.sh "
     if [ -n "${input_metadata}" ]; then
       # Gather metadata files and build string to pass
-      metadata_string+=" --metadata "
+      metadata_string=" --metadata "
 
-      metadata_string=$(find ~/in/input_metadata/ -type f)
+      metadata_string+=$(find ~/in/input_metadata/ -type f)
 
       opencga_cmd+=" ${metadata_string}"
     fi
