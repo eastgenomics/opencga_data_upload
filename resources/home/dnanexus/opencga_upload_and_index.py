@@ -130,7 +130,7 @@ if __name__ == '__main__':
 
     vcf_data = {}
 
-    if args.metadata is not None:
+    if args.metadata:
         logger.info("Metadata files provided")
         # Link vcfs and metadata together
         vcf_with_metadata = link_metadata_vcfs(args.metadata, args.vcf)
