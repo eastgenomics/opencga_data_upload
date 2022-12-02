@@ -14,6 +14,7 @@ from subprocess import PIPE
 from opencga_functions import *
 import re
 
+import concurrent
 import dxpy
 
 
@@ -62,6 +63,42 @@ def link_metadata_vcfs(metadata_files, vcf_files):
         data.extend([[vcf, file] for vcf in vcf_files if full_name in vcf])
 
     return data
+
+
+def link_vcfs_to_dnanexus_ids():
+    """ Get the dnanexus ids from the job_input.json file in /home/dnanexus/
+        and link those ids to the names of the vcf files
+
+    Returns:
+        dict: Dict linking vcf names to ids
+    """
+
+    with open('job_input.json') as fh:
+        input_data = json.load(fh)
+
+    # get just ids for the vcf input
+    ids = [x['$dnanexus_link'] for x in input_data['vcfs']]
+    ids_names = {}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(ids)) as executor:
+        # submit jobs mapping each id to describe call
+        concurrent_jobs = {
+            executor.submit(dxpy.describe, dnanexus_id): dnanexus_id
+            for dnanexus_id in ids
+        }
+
+        for future in concurrent.futures.as_completed(concurrent_jobs):
+            # access returned output as each is returned in any order
+            try:
+                response = future.result()
+                ids_names[response['name']] = response['id']
+            except Exception as exc:
+                # catch any errors that might get raised during querying
+                print(
+                    f"Error getting data for {concurrent_jobs[future]}: {exc}"
+                )
+
+    return ids_names
 
 
 if __name__ == '__main__':
@@ -154,19 +191,16 @@ if __name__ == '__main__':
     # Check study to define index type
     somatic = args.somatic
 
+    vcf2ids = link_vcfs_to_dnanexus_ids()
+
     # go through each vcf and upload and index them
     for vcf in vcf_data:
         study_fqn = vcf_data[vcf]["study_fqn"]
         multi_file = vcf_data[vcf]["multi_file"]
-        # find dnanexus id
-        vcf_object = dxpy.find_one_data_object(
-            classname="file", name=vcf, project=args.dnanexus_project,
-            more_ok=False
-        )
         # Format DNAnexus file ID to attributes
         file_data = {}
         file_data["attributes"] = {
-            "DNAnexusFileId": vcf_object.get_id()
+            "DNAnexusFileId": vcf2ids[vcf]
         }
 
         # define software
