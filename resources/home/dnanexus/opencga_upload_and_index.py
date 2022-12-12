@@ -108,42 +108,6 @@ def link_vcfs_to_dnanexus_ids():
     return ids_names
 
 
-def link_vcfs_to_dnanexus_ids():
-    """ Get the dnanexus ids from the job_input.json file in /home/dnanexus/
-        and link those ids to the names of the vcf files
-
-    Returns:
-        dict: Dict linking vcf names to ids
-    """
-
-    with open('job_input.json') as fh:
-        input_data = json.load(fh)
-
-    # get just ids for the vcf input
-    ids = [x['$dnanexus_link'] for x in input_data['vcfs']]
-    ids_names = {}
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(ids)) as executor:
-        # submit jobs mapping each id to describe call
-        concurrent_jobs = {
-            executor.submit(dxpy.describe, dnanexus_id): dnanexus_id
-            for dnanexus_id in ids
-        }
-
-        for future in concurrent.futures.as_completed(concurrent_jobs):
-            # access returned output as each is returned in any order
-            try:
-                response = future.result()
-                ids_names[response['name']] = response['id']
-            except Exception as exc:
-                # catch any errors that might get raised during querying
-                print(
-                    f"Error getting data for {concurrent_jobs[future]}: {exc}"
-                )
-
-    return ids_names
-
-
 if __name__ == '__main__':
     # Set the arguments of the command line
     parser = argparse.ArgumentParser(description=' Load VCFs from DNANexus into OpenCGA')
@@ -157,8 +121,6 @@ if __name__ == '__main__':
     parser.add_argument('--somatic', help='Use the somatic flag if the sample to be loaded is somatic',
                         action='store_true')
     parser.add_argument('--multifile', help='Use the multifile flag if you expect to load multiple files from this '
-                                            'sample', default=False, action='store_true')
-    parser.add_argument('--dnanexus_project', help='DNAnexus project ID')
                                             'sample', default=False, action='store_true')
     parser.add_argument('--dnanexus_project', help='DNAnexus project ID')
     args = parser.parse_args()
@@ -203,39 +165,9 @@ if __name__ == '__main__':
 
             vcf_data[vcf_file]["multi_file"] = multi_file
 
-        for vcf_file, metadata_file in vcf_with_metadata:
-            manifest, samples, individuals, clinical = read_metadata(metadata_file=metadata_file, logger=logger)
-            vcf_data[vcf_file]["project"] = manifest['configuration']['projectId']
-            vcf_data[vcf_file]["study"] = manifest['study']['id']
-            vcf_data[vcf_file]["study_fqn"] = f"{manifest['configuration']['projectId']}:{manifest['study']['id']}"
-            vcf_data[vcf_file]["samples"] = samples
-            vcf_data[vcf_file]["individuals"] = individuals
-            vcf_data[vcf_file]["clinical"] = clinical
-            # Get case priority. If case priority is URGENT, jobs will not be delayed
-            delay = True
-            priority = clinical[0]['priority']['id']
-            if priority in no_delay_priority:
-                delay = False
-
-            vcf_data[vcf_file]["delay"] = delay
-
-            multi_file = args.multifile
-
-            if clinical[0]['type'] == 'CANCER':
-                multi_file = True
-
-            vcf_data[vcf_file]["multi_file"] = multi_file
     else:
         logger.info("No metadata has been provided, VCF will not be associated to any individuals or cases")
         if args.project is not None and args.study is not None:
-            for vcf_file in args.vcf:
-                vcf_data[vcf_file]["project"] = project
-                vcf_data[vcf_file]["study"] = study
-                vcf_data[vcf_file]["study_fqn"] = f"{project}:{study}"
-                vcf_data[vcf_file]["samples"] = None
-                vcf_data[vcf_file]["individuals"] = None
-                vcf_data[vcf_file]["clinical"] = None
-
             for vcf_file in args.vcf:
                 vcf_data[vcf_file]["project"] = project
                 vcf_data[vcf_file]["study"] = study
@@ -268,7 +200,6 @@ if __name__ == '__main__':
     somatic = args.somatic
 
     vcf2ids = link_vcfs_to_dnanexus_ids()
-    vcf2ids = link_vcfs_to_dnanexus_ids()
 
     # go through each vcf and upload and index them
     for vcf in vcf_data:
@@ -280,15 +211,6 @@ if __name__ == '__main__':
             "DNAnexusFileId": vcf2ids[vcf.name]
         }
 
-        # define software
-        if 'tnhaplotyper2' in os.path.basename(vcf):
-            file_data['software'] = {'name': 'TNhaplotyper2'}
-        if '.flagged.' in os.path.basename(vcf):
-            file_data['software'] = {'name': 'Pindel'}
-        if '.SV.' in os.path.basename(vcf):
-            file_data['software'] = {'name': 'Manta'}
-        if os.path.basename(vcf).startswith('EH_'):
-            file_data['software'] = {'name': 'ExpansionHunter'}
         # define software
         if 'tnhaplotyper2' in os.path.basename(vcf):
             file_data['software'] = {'name': 'TNhaplotyper2'}
@@ -337,18 +259,7 @@ if __name__ == '__main__':
     else:
         logger.info("Annotating file {} into study {}...".format(os.path.basename(vcf_file), study_fqn))
         annotate_variants(oc=oc, project=project, study=study, logger=logger)
-    # ANNOTATION
-    if annotated:
-        logger.info("File {} is already annotated in the OpenCGA study {}.".format(os.path.basename(vcf_file),
-                                                                                study_fqn))
-    else:
-        logger.info("Annotating file {} into study {}...".format(os.path.basename(vcf_file), study_fqn))
-        annotate_variants(oc=oc, project=project, study=study, logger=logger)
 
-    # Launch sample stats index
-    logger.info("Launching sample stats...")
-    # svs_job = sample_variant_stats(oc=oc, study=study_fqn, sample_ids=sample_ids, logger=logger)
-    # TODO: Check status of this job at the end
     # Launch sample stats index
     logger.info("Launching sample stats...")
     # svs_job = sample_variant_stats(oc=oc, study=study_fqn, sample_ids=sample_ids, logger=logger)
@@ -356,25 +267,12 @@ if __name__ == '__main__':
 
     # SECONDARY ANNOTATION INDEX
     secondary_annotation_index(oc=oc, study=study_fqn, logger=logger)
-    # SECONDARY ANNOTATION INDEX
-    secondary_annotation_index(oc=oc, study=study_fqn, logger=logger)
 
     logger.info("Loading metadata...")
     # LOAD TEMPLATE
     # load_template(oc=oc, study=manifest['study']['id'], template=args.metadata,
     #               logger=logger)
-    logger.info("Loading metadata...")
-    # LOAD TEMPLATE
-    # load_template(oc=oc, study=manifest['study']['id'], template=args.metadata,
-    #               logger=logger)
 
-    for vcf in vcf_data:
-        individuals = vcf_data[vcf]["individuals"]
-        samples = vcf_data[vcf]["samples"]
-        clinical = vcf_data[vcf]["individuals"]
-
-        if individuals and samples and clinical:
-            study_fqn = vcf_data[vcf]["study_fqn"]
     for vcf in vcf_data:
         individuals = vcf_data[vcf]["individuals"]
         samples = vcf_data[vcf]["samples"]
@@ -384,7 +282,6 @@ if __name__ == '__main__':
             study_fqn = vcf_data[vcf]["study_fqn"]
             # CREATE IND
             # Get sample ID
-            sampleIds = oc.files.info(study=study_fqn, files=os.path.basename(vcf), include="sampleIds").get_result(0)['sampleIds']
             sampleIds = oc.files.info(study=study_fqn, files=os.path.basename(vcf), include="sampleIds").get_result(0)['sampleIds']
             if len(sampleIds) >= 1 and 'TA2_S59_L008_tumor' in sampleIds:
                 sampleIds.remove('TA2_S59_L008_tumor')
@@ -450,7 +347,6 @@ if __name__ == '__main__':
             # Check again the status of the file
             uploaded, indexed, annotated, sample_index, existing_file_path, sample_ids = check_file_status(oc=oc,
                                                                                                 study=study_fqn,
-                                                                                                file_name=os.path.basename(vcf),
                                                                                                 file_name=os.path.basename(vcf),
                                                                                                 file_info=file_data,
                                                                                                 logger=logger, check_attributes=True)
