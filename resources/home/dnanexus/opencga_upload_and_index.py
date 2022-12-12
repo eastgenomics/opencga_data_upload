@@ -276,7 +276,7 @@ if __name__ == '__main__':
     for vcf in vcf_data:
         individuals = vcf_data[vcf]["individuals"]
         samples = vcf_data[vcf]["samples"]
-        clinical = vcf_data[vcf]["individuals"]
+        clinical = vcf_data[vcf]["clinical"]
 
         if individuals and samples and clinical:
             study_fqn = vcf_data[vcf]["study_fqn"]
