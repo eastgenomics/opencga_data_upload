@@ -15,11 +15,11 @@
     },
     {
       "name": "input_metadata",
-      "label": "Metadata file",
+      "label": "Metadata files",
       "class": "array:file",
       "optional": true,
       "patterns": ["*"],
-      "help": "Zip file containing multiple YAML files with information about the study and the clinical metadata to be loaded"
+      "help": "Zip files containing multiple YAML files with information about the study and the clinical metadata to be loaded"
     },
     {
       "name": "input_credentials",

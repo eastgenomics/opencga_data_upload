@@ -32,37 +32,32 @@ main() {
     # Read credentials file
     read_cred ~/in/input_credentials/${input_credentials_name}
 
-    # Download openCGA CLI and uncompress
-    echo "Getting the OpenCGA CLI"
-    # cli file id is stored in the credentials file
-    dx download ${opencga_cli_file_id}
-    cli_name=$(dx describe "${opencga_cli_file_id}" --name)
-    mkdir -p /home/dnanexus/opencga_cli && tar -xzf ${cli_name} -C /home/dnanexus/opencga_cli --strip-components 1
-    opencga_cli=$(ls /home/dnanexus/opencga_cli/bin)
-    if [ "${opencga_cli}" != "opencga.sh" ]; then
-      dx-jobutil-report-error "opencga.sh not found in the provided cli folder. As a result no further actions can be performed"
-    else
-      echo "${opencga_cli} in ${cli_name} is ready to use"
-    fi
+    # unpack opencga cli
+    dx download ${opencga_cli_file_id} -o opencga_client.tar.gz
+    mkdir opencga_client && tar -zxf opencga_client.tar.gz -C opencga_client --strip-components 1
 
     # Install python dependencies
     echo "Installing requirements"
-    sudo -H python3 -m pip install --no-index --no-deps
+    sudo -H python3 -m pip install --no-index --no-deps packages/*.whl
+
+    # install dxpy
+    tar xzf packages/dxpy-0.333.0.tar.gz
+    python3 dxpy-0.333.0/setup.py install
 
     # Gather all vcfs for passing to the python script and build string to pass
-    vcf_string=$(find ~/in/vcfs/ -type f)
+    vcf_string=$(find ~/in/vcfs/ -type f -printf "%p ")
 
     # Run opencga load
     echo "Launching OpenCGA upload"
-    opencga_cmd="python3 opencga_upload_and_index.py --credentials ~/in/input_credentials/${input_credentials_name} \
-                                                     --vcf ${vcf_string} \
-                                                     --cli /home/dnanexus/opencga_cli/bin/opencga.sh "
+    opencga_cmd="python3 opencga_upload_and_index.py --credentials ~/in/input_credentials/${input_credentials_name}"
+    opencga_cmd+=" --cli /home/dnanexus/opencga_client/bin/opencga.sh"
+    opencga_cmd+=" --dnanexus_project ${DX_PROJECT_CONTEXT_ID}"
+    opencga_cmd+=" --vcf ${vcf_string}"
+
     if [ -n "${input_metadata}" ]; then
       # Gather metadata files and build string to pass
-      metadata_string+=" --metadata "
-
-      metadata_string=$(find ~/in/input_metadata/ -type f)
-
+      metadata_string=" --metadata "
+      metadata_string+=$(find ~/in/input_metadata/ -type f -printf "%p ")
       opencga_cmd+=" ${metadata_string}"
     fi
     if [ -n "${input_project}" ]; then
@@ -83,10 +78,10 @@ main() {
     if [ -f /home/dnanexus/opencga_loader.err ]; then
         if [ -s /home/dnanexus/opencga_loader.err ]; then
             cat
-                dx-jobutil-report-error "ERROR: Failed to load VCF ${vcf_name} into OpenCGA. See
+                dx-jobutil-report-error "ERROR: Failed to load VCFs into OpenCGA. See
                 /home/dnanexus/opencga_loader.err for more details."
         else
-            echo "VCF ${vcf_name} was loaded successfully to OpenCGA"
+            echo "VCFs was loaded successfully to OpenCGA"
         fi
     fi
 
