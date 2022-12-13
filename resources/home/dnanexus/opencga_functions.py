@@ -73,7 +73,8 @@ def connect_cli(credentials, opencga_cli, logger):
     :param logger: logger object to generate logs
     """
     # Launch login on the CLI
-    process = subprocess.run([opencga_cli, "users", "login", "-u", credentials['user'], "-p"],
+    process = subprocess.run([opencga_cli, "users", "login", #"--host", credentials['host'],
+                              "-u", credentials['user'], "-p"],
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                              input=credentials['password'])
     logger.info(process.stdout)
@@ -267,20 +268,8 @@ def annotate_variants(oc, project, study, logger, delay=True):
     :param logger: logger object to generate logs
     :param delay: boolean specifying whether the annotation can be delayed
     """
-    # If delay is true, the function will search for any pending annotation jobs and no new annotation will be
-    # launched. Any following jobs will be dependent of this job.
-    # If delay is false, an annotation job will be launched regardless of any other annotations
-    annotate_job = None
-    if delay:
-        prev_annotation_jobs = oc.jobs.search(study=study, **{'tool.id': 'variant-annotation-index'}).get_results()
-        for paj in prev_annotation_jobs:
-            if paj['internal']['status']['id'] == 'PENDING':
-                annotate_job = paj
-    # delay = False OR no PENDING annotation job
-    if annotate_job is None:
-        annotate_job = oc.variant_operations.index_variant_annotation(project=project, data={})
-        logger.info("Annotating new variants in project {} with job ID: {}".format(project,
-                                                                                   annotate_job.get_result(0)['id']))
+    annotate_job = oc.variant_operations.index_variant_annotation(project=project, data={})
+    logger.info("Annotating new variants in project {} with job ID: {}".format(project, annotate_job.get_result(0)['id']))
     # wait for job to finish
     try:
         oc.wait_for_job(response=annotate_job.get_response(0))
@@ -297,7 +286,7 @@ def annotate_variants(oc, project, study, logger, delay=True):
     return annotate_job
 
 
-def sample_variant_stats(oc, study, sample_ids, logger):
+def sample_variant_stats(oc, study, samples, logger):
     """
     Compute sample variant stats for the selected list of samples
     :param oc: OpenCGA client
@@ -305,7 +294,9 @@ def sample_variant_stats(oc, study, sample_ids, logger):
     :param sample_ids: list of sample IDs to calculate stats on
     :param logger: logger object to generate logs
     """
-    sample_variant_stats_job = oc.variants.run_sample_stats(study=study, data={'sample': 'all',
+    if isinstance(samples, str):
+        samples = [samples]
+    sample_variant_stats_job = oc.variants.run_sample_stats(study=study, data={'sample': samples,
                                                                                'index': True,
                                                                                'indexId': 'all'})
     # TODO: Add example of query with filters
@@ -322,19 +313,8 @@ def secondary_annotation_index(oc, study, logger, delay=True):
     :param logger: logger object to generate logs
     :param delay: boolean specifying whether the annotation can be delayed
     """
-    # If delay is true, the function will search for any pending secondary index jobs and, if found, no job will be
-    # launched. Any following jobs will be dependent of this job.
-    # If delay is false, a secondary index job will be launched regardless of any other pending jobs
-    secondary_annotation_index_job = None
-    if delay:
-        prev_secondary_annot_index_jobs = oc.jobs.search(study=study, **{'tool.id': 'variant-secondary-annotation-index'}).get_results()
-        for psaij in prev_secondary_annot_index_jobs:
-            if psaij['internal']['status']['id'] == 'PENDING':
-                secondary_annotation_index_job = psaij
-    # delay = False OR no PENDING secondary index job
-    if secondary_annotation_index_job is None:
-        secondary_annotation_index_job = oc.variant_operations.variant_secondary_annotation_index(study=study, data={})
-        logger.info("Indexing study {} in Solr with job ID: {}".format(study, secondary_annotation_index_job.get_result(0)['id']))
+    secondary_annotation_index_job = oc.variant_operations.variant_secondary_annotation_index(study=study, data={})
+    logger.info("Indexing study {} in Solr with job ID: {}".format(study, secondary_annotation_index_job.get_result(0)['id']))
     # wait for job to finish
     try:
         oc.wait_for_job(response=secondary_annotation_index_job.get_response(0))
@@ -351,7 +331,7 @@ def secondary_annotation_index(oc, study, logger, delay=True):
     return secondary_annotation_index_job
 
 
-def secondary_sample_index(oc, study, sample, logger):
+def secondary_sample_index(oc, study, samples, logger):
     """
     Index data in Solr to be displayed in the variant browser
     :param oc: OpenCGA client
@@ -359,8 +339,8 @@ def secondary_sample_index(oc, study, sample, logger):
     :param logger: logger object to generate logs
     :param delay: boolean specifying whether the annotation can be delayed
     """
-    secondary_sample_index_job = oc.variant_operations.variant_secondary_sample_index(study=study, data={'sample': sample})
-    logger.info("Indexing sample {} in Solr with job ID: {}".format(sample, secondary_sample_index_job.get_result(0)['id']))
+    secondary_sample_index_job = oc.variant_operations.variant_secondary_sample_index(study=study, data={'sample': samples})
+    logger.info("Indexing sample {} in Solr with job ID: {}".format(samples, secondary_sample_index_job.get_result(0)['id']))
     # wait for job to finish
     # try:
     #     oc.wait_for_job(response=secondary_sample_index_job.get_response(0))

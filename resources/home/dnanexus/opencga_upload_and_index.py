@@ -2,17 +2,9 @@
 
 # import required libraries
 import datetime
-import os
-import sys
-import json
 import logging
 import argparse
-import subprocess
-from pyopencga.opencga_client import OpencgaClient
-from pyopencga.opencga_config import ClientConfiguration
-from subprocess import PIPE
 from opencga_functions import *
-import re
 
 
 # Define logger handlers (one file for logs and one for errors)
@@ -48,7 +40,6 @@ if __name__ == '__main__':
     parser.add_argument('--metadata', help='Zip file containing the metadata (minimum required information: "study")')
     parser.add_argument('--credentials', help='JSON file with credentials and host to access OpenCGA')
     parser.add_argument('--cli', help='Path to OpenCGA cli')
-    # parser.add_argument('--cli21', help='Path to OpenCGA cli 2.1')
     parser.add_argument('--vcf', help='Input vcf file')
     parser.add_argument('--somatic', help='Use the somatic flag if the sample to be loaded is somatic',
                         action='store_true')
@@ -62,11 +53,6 @@ if __name__ == '__main__':
         logger.error("OpenCGA CLI not found.")
         sys.exit(1)
     opencga_cli = args.cli
-
-    # if not os.path.isfile(args.cli21):
-    #     logger.error("OpenCGA CLI 2.1 not found.")
-    #     sys.exit(1)
-    # opencga_cli21 = args.cli21
 
     # Check if metadata has been provided
     metadata = None
@@ -96,8 +82,8 @@ if __name__ == '__main__':
         # manifest['study']['id'] = 'app_test'
         project = manifest['configuration']['projectId']
         study = manifest['study']['id']
-        project = 'dnanexus'
-        study = 'app_test'
+        # project = 'dnanexus'
+        # study = 'app_test'
 
     # Define study FQN
     if project is not None and study is not None:
@@ -112,7 +98,6 @@ if __name__ == '__main__':
 
     # Login OpenCGA CLI
     connect_cli(credentials=credentials, opencga_cli=opencga_cli, logger=logger)
-    # connect_cli(credentials=credentials, opencga_cli=opencga_cli21, logger=logger)
 
     # Create pyopencga client
     oc = connect_pyopencga(credentials=credentials, logger=logger)
@@ -121,12 +106,12 @@ if __name__ == '__main__':
     date_folder = datetime.date.today().strftime("%Y%m")
     file_path = "data/" + date_folder
 
-    # Get case priority. If case priority is URGENT, jobs will not be delayed
-    delay = True
-    if metadata:
-        priority = clinical[0]['priority']['id']
-        if priority in no_delay_priority:
-            delay = False
+    # # Get case priority. If case priority is URGENT, jobs will not be delayed
+    # delay = True
+    # if metadata:
+    #     priority = clinical[0]['priority']['id']
+    #     if priority in no_delay_priority:
+    #         delay = False
 
     # Check study to define index type
     somatic = args.somatic
@@ -181,20 +166,15 @@ if __name__ == '__main__':
     # TODO: Check status of this job at the end
 
     # ANNOTATION
-    if annotated:
-        logger.info("File {} is already annotated in the OpenCGA study {}.".format(os.path.basename(args.vcf),
-                                                                                   study_fqn))
-    else:
-        logger.info("Annotating file {} into study {}...".format(os.path.basename(args.vcf), study_fqn))
-        annotate_variants(oc=oc, project=project, study=study, logger=logger, delay=delay)
-
-    # Launch sample stats index
-    logger.info("Launching sample stats...")
-    # svs_job = sample_variant_stats(oc=oc, study=study_fqn, sample_ids=sample_ids, logger=logger)
-    # TODO: Check status of this job at the end
+    # if annotated:
+    #     logger.info("File {} is already annotated in the OpenCGA study {}.".format(os.path.basename(args.vcf),
+    #                                                                                study_fqn))
+    # else:
+    #     logger.info("Annotating variants...".format(os.path.basename(args.vcf), study_fqn))
+    annotate_variants(oc=oc, project=project, study=study, logger=logger)
 
     # SECONDARY ANNOTATION INDEX
-    secondary_annotation_index(oc=oc, study=study_fqn, logger=logger, delay=delay)
+    secondary_annotation_index(oc=oc, study=study_fqn, logger=logger)
 
     # METADATA
     if metadata:
@@ -265,8 +245,13 @@ if __name__ == '__main__':
     elif check_case == 1:
         logger.info("Case {} already exists in the database.".format(clinical_case["id"]))
 
+    # Launch sample stats index
+    logger.info("Launching sample stats...")
+    # svs_job = sample_variant_stats(oc=oc, study=study_fqn, samples=sampleIds, logger=logger)
+    # TODO: Check status of this job at the end
+
     # SECONDARY SAMPLE INDEX
-    secondary_sample_index(oc=oc, study=study_fqn, sample=sampleIds[0], logger=logger)
+    secondary_sample_index(oc=oc, study=study_fqn, samples=sampleIds, logger=logger)
 
     # Check again the status of the file
     uploaded, indexed, annotated, sample_index, existing_file_path, sample_ids = check_file_status(oc=oc,
