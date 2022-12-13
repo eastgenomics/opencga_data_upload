@@ -82,8 +82,8 @@ if __name__ == '__main__':
         # manifest['study']['id'] = 'app_test'
         project = manifest['configuration']['projectId']
         study = manifest['study']['id']
-        # project = 'dnanexus'
-        # study = 'app_test'
+        project = 'dnanexus2'
+        study = 'test_app2'
 
     # Define study FQN
     if project is not None and study is not None:
