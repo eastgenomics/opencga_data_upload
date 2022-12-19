@@ -81,7 +81,7 @@ main() {
                 dx-jobutil-report-error "ERROR: Failed to load VCFs into OpenCGA. See
                 /home/dnanexus/opencga_loader.err for more details."
         else
-            echo "VCFs was loaded successfully to OpenCGA"
+            echo "VCFs were loaded successfully to OpenCGA"
         fi
     fi
 

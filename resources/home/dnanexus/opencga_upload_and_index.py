@@ -4,20 +4,9 @@
 import datetime
 from collections import defaultdict
 from pathlib import Path
-import os
-import sys
-import json
 import logging
 import argparse
-import subprocess
-from pyopencga.opencga_client import OpencgaClient
-from pyopencga.opencga_config import ClientConfiguration
-from subprocess import PIPE
 from opencga_functions import *
-import re
-
-import concurrent
-import dxpy
 
 import concurrent
 import dxpy
@@ -116,7 +105,6 @@ if __name__ == '__main__':
     parser.add_argument('--metadata', nargs="+", help='Zip file(s) containing the metadata (minimum required information: "study")')
     parser.add_argument('--credentials', help='JSON file with credentials and host to access OpenCGA')
     parser.add_argument('--cli', help='Path to OpenCGA cli')
-    # parser.add_argument('--cli21', help='Path to OpenCGA cli 2.1')
     parser.add_argument('--vcf', nargs="+", help='Input vcf(s) file')
     parser.add_argument('--somatic', help='Use the somatic flag if the sample to be loaded is somatic',
                         action='store_true')
@@ -144,9 +132,12 @@ if __name__ == '__main__':
 
         for vcf_file, metadata_file in vcf_with_metadata:
             manifest, samples, individuals, clinical = read_metadata(metadata_file=metadata_file, logger=logger)
-            vcf_data[vcf_file]["project"] = manifest['configuration']['projectId']
-            vcf_data[vcf_file]["study"] = manifest['study']['id']
-            vcf_data[vcf_file]["study_fqn"] = f"{manifest['configuration']['projectId']}:{manifest['study']['id']}"
+            # vcf_data[vcf_file]["project"] = manifest['configuration']['projectId']
+            # vcf_data[vcf_file]["study"] = manifest['study']['id']
+            # vcf_data[vcf_file]["study_fqn"] = f"{manifest['configuration']['projectId']}:{manifest['study']['id']}"
+            vcf_data[vcf_file]["project"] = project
+            vcf_data[vcf_file]["study"] = study
+            vcf_data[vcf_file]["study_fqn"] = f"{project}:{study}"
             vcf_data[vcf_file]["samples"] = samples
             vcf_data[vcf_file]["individuals"] = individuals
             vcf_data[vcf_file]["clinical"] = clinical
@@ -187,7 +178,6 @@ if __name__ == '__main__':
 
     # Login OpenCGA CLI
     connect_cli(credentials=credentials, opencga_cli=opencga_cli, logger=logger)
-    # connect_cli(credentials=credentials, opencga_cli=opencga_cli21, logger=logger)
 
     # Create pyopencga client
     oc = connect_pyopencga(credentials=credentials, logger=logger)
@@ -243,30 +233,42 @@ if __name__ == '__main__':
         else:
             logger.info("Indexing file {} into study {}...".format(os.path.basename(vcf), proj_study))
             index_file(oc=oc, study=proj_study, file=os.path.basename(vcf), logger=logger,
-                    somatic=somatic, multifile=multi_file)
+                       somatic=somatic, multifile=multi_file)
+
+        # Reconnect
+        connect_cli(credentials=credentials, opencga_cli=opencga_cli, logger=logger)
+        oc = connect_pyopencga(credentials=credentials, logger=logger)
 
     study_fqn = f"{project}:{study}"
 
     # Launch variant stats index
     logger.info("Launching variant stats...")
     vsi_job = variant_stats_index(oc=oc, study=proj_study, cohort='ALL', logger=logger)
-    # TODO: Check status of this job at the end
+
+    # Reconnect
+    oc = connect_pyopencga(credentials=credentials, logger=logger)
 
     # ANNOTATION
-    if annotated:
-        logger.info("File {} is already annotated in the OpenCGA study {}.".format(os.path.basename(vcf_file),
-                                                                                study_fqn))
-    else:
-        logger.info("Annotating file {} into study {}...".format(os.path.basename(vcf_file), study_fqn))
-        annotate_variants(oc=oc, project=project, study=study, logger=logger)
+    logger.info("Annotating variants in study {}...".format(study_fqn))
+    annotate_variants(oc=oc, project=project, study=study, logger=logger)
+
+    # Reconnect
+    oc = connect_pyopencga(credentials=credentials, logger=logger)
+
+    # SECONDARY ANNOTATION INDEX
+    logger.info("Running secondary (Solr) index in study {}...".format(study_fqn))
+    secondary_annotation_index(oc=oc, study=study_fqn, logger=logger)
 
     # Launch sample stats index
-    logger.info("Launching sample stats...")
+    # logger.info("Launching sample stats...")
     # svs_job = sample_variant_stats(oc=oc, study=study_fqn, sample_ids=sample_ids, logger=logger)
     # TODO: Check status of this job at the end
 
-    # SECONDARY ANNOTATION INDEX
-    secondary_annotation_index(oc=oc, study=study_fqn, logger=logger)
+    # SECONDARY SAMPLE INDEX
+    secondary_sample_index(oc=oc, study=study_fqn, logger=logger)
+
+    # Reconnect
+    oc = connect_pyopencga(credentials=credentials, logger=logger)
 
     logger.info("Loading metadata...")
     # LOAD TEMPLATE
@@ -312,7 +314,7 @@ if __name__ == '__main__':
             # associate sample and individual
             for sampleID in sampleIds:
                 oc.samples.update(study=study_fqn, samples=sampleID, data={'individualId': individuals['id'],
-                                                                        'somatic': somatic})
+                                                                           'somatic': somatic})
 
             # CREATE CASE
             logger.info("Checking if clinical case exists...")
@@ -341,15 +343,12 @@ if __name__ == '__main__':
             elif check_case == 1:
                 logger.info("Case {} already exists in the database.".format(clinical_case["id"]))
 
-            # SECONDARY SAMPLE INDEX
-            secondary_sample_index(oc=oc, study=study_fqn, sample=sampleIds[0], logger=logger)
-
             # Check again the status of the file
             uploaded, indexed, annotated, sample_index, existing_file_path, sample_ids = check_file_status(oc=oc,
                                                                                                 study=study_fqn,
                                                                                                 file_name=os.path.basename(vcf),
                                                                                                 file_info=file_data,
-                                                                                                logger=logger, check_attributes=True)
+                                                                                                logger=logger, check_attributes=False)
 
     # close loggers
     oh.close()

@@ -8,7 +8,6 @@ from pyopencga.opencga_client import OpencgaClient
 from pyopencga.opencga_config import ClientConfiguration
 import subprocess
 from subprocess import PIPE
-from time import time
 
 # Define status id
 status_id = "name"  # Used to be "name" in v2.1, but we are moving to using "id" since v2.2
@@ -197,7 +196,7 @@ def upload_file(opencga_cli, oc, study, file, logger, file_info=dict(), file_pat
     # Run upload using the bash CLI
     process = subprocess.Popen([opencga_cli, "files", "upload", "--input", file, "--study", study,
                                 "--catalog-path", file_path, "--parents"], stdout=PIPE, stderr=PIPE, text=True)
-    print("CLI executed: {}".format(process.args))
+    logger.info("CLI executed: {}".format(process.args))
     process.wait()  # Wait until the execution is complete to continue with the program
     stdout, stderr = process.communicate()
     if "ERROR" in stderr:
@@ -222,25 +221,40 @@ def index_file(oc, study, file, logger, somatic=False, multifile=False):
     :param file: name of the VCF file already uploaded into OpenCGA
     :param logger: logger object to generate logs
     """
+    retry = 3
     data_obj = {'file': file}
     if somatic:
         data_obj['somatic'] = True
     if multifile:
         data_obj['loadMultiFileData'] = True
-    index_job = oc.variants.run_index(study=study, data=data_obj)
-    logger.info("Indexing file {} with job ID: {}".format(file, index_job.get_result(0)['id']))
-    try:
+    success = None
+
+    def run_index():
+        index_job = oc.variants.run_index(study=study, data=data_obj)
+        logger.info("Indexing file {} with job ID: {}".format(file, index_job.get_result(0)['id']))
         oc.wait_for_job(response=index_job.get_response(0))
-        status = oc.jobs.info(study=study, jobs=index_job.get_result(0)['id'])
-        if status.get_result(0)['execution']['status']['name'] == 'DONE':
-            logger.info("OpenCGA job index file completed successfully")
-        else:
-            logger.info(
-                "OpenCGA job index file failed with status {}".format(
-                    status.get_result(0)['execution']['status']['name']))
-    except ValueError as ve:
-        logger.exception("OpenCGA failed to index the file. {}".format(ve))
-        sys.exit(1)
+        job_info = oc.jobs.info(study=study, jobs=index_job.get_result(0)['id'])
+        return job_info
+
+    for i in range(retry):
+        try:
+            status = run_index()
+            if status.get_result(0)['execution']['status']['name'] == 'DONE':
+                success = True
+                logger.info("OpenCGA job index file completed successfully for {}".format(file))
+                break
+            else:
+                logger.error("OpenCGA failed to index file {} with status {}".format(file,
+                                                                status.get_result(0)['execution']['status']['name']))
+                logger.warning("Failed to index file {}. This operations will be reattempted up to {} times.".format(file, str(retry)))
+                logger.warning("Attempt indexing file {} ({}/3)".format(file, i+1))
+                continue
+        except ValueError as ve:
+            logger.error("OpenCGA failed to index file {} with status {}".format(file,
+                                                                                status.get_result(0)['execution']['status']['name']))
+            logger.exception("OpenCGA failed to index file {}. {}".format(file, ve))
+            sys.exit(1)
+    return success
 
 
 def variant_stats_index(oc, study, cohort, logger):
@@ -255,7 +269,19 @@ def variant_stats_index(oc, study, cohort, logger):
         cohort = [cohort]
     variant_stats_job = oc.operations.index_variant_stats(study=study, data={'cohort': cohort})
     logger.info("Calculating variant stats with job ID: {}".format(variant_stats_job.get_result(0)['id']))
-    return variant_stats_job.get_result(0)['id']
+    try:
+        oc.wait_for_job(response=variant_stats_job.get_response(0))
+        status = oc.jobs.info(study=study, jobs=variant_stats_job.get_result(0)['id'])
+        if status.get_result(0)['execution']['status']['name'] == 'DONE':
+            logger.info("Variant stats index completed successfully")
+        else:
+            logger.info(
+                "Variant stats index failed with status {}".format(
+                    status.get_result(0)['execution']['status']['name']))
+    except ValueError as ve:
+        logger.exception("OpenCGA failed to calculate variant stats. {}".format(ve))
+        sys.exit(1)
+    # return variant_stats_job.get_result(0)['id']
 
 
 def annotate_variants(oc, project, study, logger, delay=True):
@@ -267,24 +293,13 @@ def annotate_variants(oc, project, study, logger, delay=True):
     :param logger: logger object to generate logs
     :param delay: boolean specifying whether the annotation can be delayed
     """
-    # If delay is true, the function will search for any pending annotation jobs and no new annotation will be
-    # launched. Any following jobs will be dependent of this job.
-    # If delay is false, an annotation job will be launched regardless of any other annotations
-    annotate_job = None
-    if delay:
-        prev_annotation_jobs = oc.jobs.search(study=study, **{'tool.id': 'variant-annotation-index'}).get_results()
-        for paj in prev_annotation_jobs:
-            if paj['internal']['status']['id'] == 'PENDING':
-                annotate_job = paj
-    # delay = False OR no PENDING annotation job
-    if annotate_job is None:
-        annotate_job = oc.variant_operations.index_variant_annotation(project=project, data={})
-        logger.info("Annotating new variants in project {} with job ID: {}".format(project,
-                                                                                   annotate_job.get_result(0)['id']))
+    annotate_job = oc.variant_operations.index_variant_annotation(project=project, data={})
+    logger.info("Annotating new variants in project {} with job ID: {}".format(project,
+                                                                               annotate_job.get_result(0)['id']))
     # wait for job to finish
     try:
         oc.wait_for_job(response=annotate_job.get_response(0))
-        status = oc.jobs.info(study=study, jobs=annotate_job.get_result(0)['id'])
+        status = oc.jobs.info(study=project+":"+study, jobs=annotate_job.get_result(0)['id'])
         if status.get_result(0)['execution']['status']['name'] == 'DONE':
             logger.info("OpenCGA job annotate variants completed successfully")
         else:
@@ -295,6 +310,32 @@ def annotate_variants(oc, project, study, logger, delay=True):
         logger.exception("OpenCGA annotation job failed. {}".format(ve))
         sys.exit(1)
     return annotate_job
+
+
+def secondary_annotation_index(oc, study, logger, delay=True):
+    """
+    Index data in Solr to be displayed in the variant browser
+    :param oc: OpenCGA client
+    :param study: study ID
+    :param logger: logger object to generate logs
+    :param delay: boolean specifying whether the annotation can be delayed
+    """
+    secondary_annotation_index_job = oc.variant_operations.variant_secondary_annotation_index(study=study, data={})
+    logger.info("Indexing study {} in Solr with job ID: {}".format(study, secondary_annotation_index_job.get_result(0)['id']))
+    # wait for job to finish
+    try:
+        oc.wait_for_job(response=secondary_annotation_index_job.get_response(0))
+        status = oc.jobs.info(study=study, jobs=secondary_annotation_index_job.get_result(0)['id'])
+        if status.get_result(0)['execution']['status']['name'] == 'DONE':
+            logger.info("OpenCGA job secondary annotation index completed successfully")
+        else:
+            logger.info(
+                "OpenCGA job secondary annotation index failed with status {}".format(
+                    status.get_result(0)['execution']['status']['name']))
+    except ValueError as ve:
+        logger.exception("OpenCGA secondary annotation index job failed. {}".format(ve))
+        sys.exit(1)
+    return secondary_annotation_index_job
 
 
 def sample_variant_stats(oc, study, sample_ids, logger):
@@ -314,7 +355,7 @@ def sample_variant_stats(oc, study, sample_ids, logger):
     return sample_variant_stats_job.get_result(0)['id']
 
 
-def secondary_annotation_index(oc, study, logger, delay=True):
+def secondary_sample_index(oc, study, logger):
     """
     Index data in Solr to be displayed in the variant browser
     :param oc: OpenCGA client
@@ -322,45 +363,11 @@ def secondary_annotation_index(oc, study, logger, delay=True):
     :param logger: logger object to generate logs
     :param delay: boolean specifying whether the annotation can be delayed
     """
-    # If delay is true, the function will search for any pending secondary index jobs and, if found, no job will be
-    # launched. Any following jobs will be dependent of this job.
-    # If delay is false, a secondary index job will be launched regardless of any other pending jobs
-    secondary_annotation_index_job = None
-    if delay:
-        prev_secondary_annot_index_jobs = oc.jobs.search(study=study, **{'tool.id': 'variant-secondary-annotation-index'}).get_results()
-        for psaij in prev_secondary_annot_index_jobs:
-            if psaij['internal']['status']['id'] == 'PENDING':
-                secondary_annotation_index_job = psaij
-    # delay = False OR no PENDING secondary index job
-    if secondary_annotation_index_job is None:
-        secondary_annotation_index_job = oc.variant_operations.variant_secondary_annotation_index(study=study, data={})
-        logger.info("Indexing study {} in Solr with job ID: {}".format(study, secondary_annotation_index_job.get_result(0)['id']))
-    # wait for job to finish
-    try:
-        oc.wait_for_job(response=secondary_annotation_index_job.get_response(0))
-        status = oc.jobs.info(study=study, jobs=secondary_annotation_index_job.get_result(0)['id'])
-        if status.get_result(0)['execution']['status']['name'] == 'DONE':
-            logger.info("OpenCGA job secondary annotation index completed successfully")
-        else:
-            logger.info(
-                "OpenCGA job secondary annotation index failed with status {}".format(
-                    status.get_result(0)['execution']['status']['name']))
-    except ValueError as ve:
-        logger.exception("OpenCGA secondary annotation index job failed. {}".format(ve))
-        sys.exit(1)
-    return secondary_annotation_index_job
-
-
-def secondary_sample_index(oc, study, sample, logger):
-    """
-    Index data in Solr to be displayed in the variant browser
-    :param oc: OpenCGA client
-    :param study: study ID
-    :param logger: logger object to generate logs
-    :param delay: boolean specifying whether the annotation can be delayed
-    """
-    secondary_sample_index_job = oc.variant_operations.variant_secondary_sample_index(study=study, data={'sample': sample})
-    logger.info("Indexing sample {} in Solr with job ID: {}".format(sample, secondary_sample_index_job.get_result(0)['id']))
+    secondary_sample_index_job = oc.variant_operations.variant_secondary_sample_index(study=study,
+                                                                                      data={'sample': ['all'],
+                                                                                            'buildIndex': True,
+                                                                                            'annotate': True})
+    logger.info("Executing sample indexing with job ID: {}".format(secondary_sample_index_job.get_result(0)['id']))
     # wait for job to finish
     # try:
     #     oc.wait_for_job(response=secondary_sample_index_job.get_response(0))
