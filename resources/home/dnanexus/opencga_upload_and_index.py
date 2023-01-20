@@ -69,6 +69,8 @@ def link_vcfs_to_dnanexus_ids():
         dict: Dict linking vcf names to ids
     """
 
+    dxpy.set_workspace_id(os.environ.get("DX_PROJECT_CONTEXT_ID"))
+
     with open('job_input.json') as fh:
         input_data = json.load(fh)
 
@@ -160,12 +162,13 @@ if __name__ == '__main__':
         logger.info("No metadata has been provided, VCF will not be associated to any individuals or cases")
         if args.project is not None and args.study is not None:
             for vcf_file in args.vcf:
-                vcf_data[vcf_file]["project"] = project
-                vcf_data[vcf_file]["study"] = study
-                vcf_data[vcf_file]["study_fqn"] = f"{project}:{study}"
-                vcf_data[vcf_file]["samples"] = None
-                vcf_data[vcf_file]["individuals"] = None
-                vcf_data[vcf_file]["clinical"] = None
+                vcf_path = Path(vcf_file)
+                vcf_data[vcf_path]["project"] = project
+                vcf_data[vcf_path]["study"] = study
+                vcf_data[vcf_path]["study_fqn"] = f"{project}:{study}"
+                vcf_data[vcf_path]["samples"] = None
+                vcf_data[vcf_path]["individuals"] = None
+                vcf_data[vcf_path]["clinical"] = None
 
             logger.info("Data will be loaded in study: {}:{}".format(project, study))
         else:
